@@ -1,0 +1,6 @@
+@WeddingPictureGame_HostAddress = http://localhost:5037
+
+GET {{WeddingPictureGame_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
