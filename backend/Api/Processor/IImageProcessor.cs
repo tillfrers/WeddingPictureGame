@@ -2,5 +2,5 @@
 
 public interface IImageProcessor
 {
-    public Task UploadImage(IFormFile file, CancellationToken cancellationToken = default);
+    public Task TransformAndSaveAsync(IFormFile file, int table, CancellationToken cancellationToken = default);
 }

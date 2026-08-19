@@ -1,5 +1,6 @@
 ﻿using Api.Persistence;
 using Api.Processor;
+using Api.Repository;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api;
@@ -13,6 +14,8 @@ public static class ConfigureServices
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
         
         services.AddScoped<IImageProcessor, ImageProcessor>();
+        services.AddScoped<IImageRepository,  ImageRepository>();
+        services.AddSingleton(TimeProvider.System);
 
         return services;
     }

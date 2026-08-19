@@ -38,6 +38,10 @@ namespace Api.Migrations
                     b.Property<int>("Tables")
                         .HasColumnType("integer");
 
+                    b.Property<byte[]>("Thumbnail")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
                     b.HasKey("Id");
 
                     b.ToTable("Images");

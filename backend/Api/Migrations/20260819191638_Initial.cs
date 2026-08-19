@@ -18,6 +18,7 @@ namespace Api.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Tables = table.Column<int>(type: "integer", nullable: false),
                     Image = table.Column<byte[]>(type: "bytea", nullable: false),
+                    Thumbnail = table.Column<byte[]>(type: "bytea", nullable: false),
                     DateCreated = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>

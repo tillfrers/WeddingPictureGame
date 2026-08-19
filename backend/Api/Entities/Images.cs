@@ -11,5 +11,7 @@ public class Images
 
     public byte[] Image { get; set; } = [];
     
+    public byte[] Thumbnail { get; set; } = [];
+    
     public DateTime DateCreated { get; set; } = DateTime.UtcNow;
 }
