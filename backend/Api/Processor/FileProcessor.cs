@@ -1,5 +1,3 @@
-﻿using System.Runtime.InteropServices;
-
 namespace Api.Processor;
 
 public class FileProcessor : IFileProcessor
@@ -35,21 +33,27 @@ public class FileProcessor : IFileProcessor
         await File.WriteAllBytesAsync(pathOriginal, original, cancellationToken);
         await File.WriteAllBytesAsync(pathDisplay, display, cancellationToken);
         await File.WriteAllBytesAsync(pathThumbnail, thumbnail, cancellationToken);
-        
+
         return new Tuple<string, string, string>(pathOriginal, pathDisplay, pathThumbnail);
     }
-    
-    public async Task<byte[]> LoadDisplayAsync(Guid id, int table, CancellationToken cancellationToken)
+
+    public string GetDisplayPath(Guid id, int table)
     {
-        var pathThumbnail = Path.Combine(GetDisplayPath(table), id + ".jpeg");
-        
-        return await File.ReadAllBytesAsync(pathThumbnail, cancellationToken);
+        var path = Path.Combine(GetDisplayPath(table), id + ".jpeg");
+
+        if (!File.Exists(path))
+            throw new FileNotFoundException();
+
+        return path;
     }
 
-    public async Task<byte[]> LoadThumbnailAsync(Guid id, int table, CancellationToken cancellationToken)
+    public string GetThumbnailPath(Guid id, int table)
     {
-        var pathThumbnail = Path.Combine(GetThumbnailPath(table), id + ".jpeg");
-        
-        return await File.ReadAllBytesAsync(pathThumbnail, cancellationToken);
+        var path = Path.Combine(GetThumbnailPath(table), id + ".jpeg");
+
+        if (!File.Exists(path))
+            throw new FileNotFoundException();
+
+        return path;
     }
 }

@@ -1,5 +1,4 @@
-﻿using System.Reflection.Metadata;
-using Api.Dto;
+﻿using Api.Dto;
 using Api.Processor;
 using Api.Repository;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +17,9 @@ public sealed class ImageController(IImageProcessor imageProcessor, IImageReposi
     {
         if (file.Length == 0)
             return BadRequest("Es wurde keine Datei ausgewählt");
+        
+        if (file.Length > 31457280) //30mb
+            return BadRequest("Das Bild ist zu groß");
         
         if (!Constants.Constants.TableIds.ContainsKey(table))
             return BadRequest("Dieser Tisch existiert nicht");
@@ -46,44 +48,51 @@ public sealed class ImageController(IImageProcessor imageProcessor, IImageReposi
         return Ok(new PagedResult<GalleryDto>(result.Item1, page, Constants.Constants.PageSizeGallery, result.Item2));
     }
     
+    private const string ImmutableCacheControl = "public, max-age=31536000, immutable";
+
     [HttpGet("{table}/{id}/display")]
-    public async Task<ActionResult> GetDisplay(string table, string id, CancellationToken cancellationToken)
+    public ActionResult GetDisplay(string table, string id)
     {
         if (!Constants.Constants.TableIds.TryGetValue(table, out var tableId))
             return BadRequest("Dieser Tisch existiert nicht");
- 
-        byte[] bytes;
+
+        if (!Guid.TryParse(id, out var guid))
+            return BadRequest("Die Id ist ungültig");
+
+        string path;
         try
         {
-            bytes = await fileProcessor.LoadDisplayAsync(Guid.Parse(id), tableId, cancellationToken);
+            path = fileProcessor.GetDisplayPath(guid, tableId);
         }
         catch (FileNotFoundException)
         {
             return NotFound("Bild nicht gefunden");
         }
 
-        return File(bytes, "image/jpeg");
+        Response.Headers["Cache-Control"] = ImmutableCacheControl;
+        return PhysicalFile(path, "image/jpeg");
     }
-    
+
     [HttpGet("{table}/{id}/thumbnail")]
-    public async Task<ActionResult> GetThumbnail(string table, string id, CancellationToken cancellationToken)
+    public ActionResult GetThumbnail(string table, string id)
     {
         if (!Constants.Constants.TableIds.TryGetValue(table, out var tableId))
             return BadRequest("Dieser Tisch existiert nicht");
 
-        byte[] bytes;
+        if (!Guid.TryParse(id, out var guid))
+            return BadRequest("Die Id ist ungültig");
+
+        string path;
         try
         {
-            bytes = await fileProcessor.LoadThumbnailAsync(Guid.Parse(id), tableId, cancellationToken);
+            path = fileProcessor.GetThumbnailPath(guid, tableId);
         }
         catch (FileNotFoundException)
         {
             return NotFound("Thumbnail nicht gefunden");
         }
-        
-        if (bytes.Length == 0)
-            return NotFound();
 
-        return File(bytes, "image/jpeg");
+        Response.Headers["Cache-Control"] = ImmutableCacheControl;
+        return PhysicalFile(path, "image/jpeg");
     }
 }

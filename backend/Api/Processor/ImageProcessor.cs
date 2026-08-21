@@ -1,4 +1,4 @@
-﻿using Api.Repository;
+using Api.Repository;
 using SkiaSharp;
 
 namespace Api.Processor;
@@ -8,25 +8,25 @@ public class ImageProcessor(IImageRepository imageRepository, IFileProcessor fil
     public async Task TransformAndSaveAsync(IFormFile file, int table, CancellationToken cancellationToken = default)
     {
         var id = Guid.NewGuid();
-        using var imageStream = new MemoryStream(); 
+        using var imageStream = new MemoryStream((int)file.Length);
         await file.CopyToAsync(imageStream, cancellationToken);
-        imageStream.Position = 0;
-        
-        var bytes = imageStream.ToArray(); 
-        var displayTask   = Task.Run(() => RescaleImage(bytes, 1080, false), cancellationToken);
-        var thumbnailTask = Task.Run(() => RescaleImage(bytes, 400,  true),  cancellationToken);
+
+        var bytes = imageStream.ToArray();
+
+        using var bitmap = DecodeAndOrient(bytes);
+
+        var displayTask   = Task.Run(() => EncodeScaled(bitmap, 1080, false), cancellationToken);
+        var thumbnailTask = Task.Run(() => EncodeScaled(bitmap, 400,  true),  cancellationToken);
 
         await Task.WhenAll(displayTask, thumbnailTask);
-        
-        var result = await fileProcessor.SaveImageAsync(id, table, imageStream.ToArray(), displayTask.Result, thumbnailTask.Result, cancellationToken);
-        
+
+        var result = await fileProcessor.SaveImageAsync(id, table, bytes, displayTask.Result, thumbnailTask.Result, cancellationToken);
+
         await imageRepository.SaveImageAsync(id, table, result.Item1, result.Item2, result.Item3, cancellationToken: cancellationToken);
     }
 
-    private static byte[] RescaleImage(byte[] source, int minSize, bool square)
+    private static SKBitmap DecodeAndOrient(byte[] source)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(minSize);
-
         using var data = SKData.CreateCopy(source);
         using var codec = SKCodec.Create(data)
             ?? throw new InvalidOperationException("Bildformat nicht lesbar.");
@@ -34,9 +34,19 @@ public class ImageProcessor(IImageRepository imageRepository, IFileProcessor fil
         var info = new SKImageInfo(codec.Info.Width, codec.Info.Height,
                                    SKColorType.Bgra8888, SKAlphaType.Premul);
 
-        using var decoded = SKBitmap.Decode(codec, info);
-        using var rotated = ApplyOrientation(decoded, codec.EncodedOrigin);
-        var bitmap = rotated ?? decoded;
+        var decoded = SKBitmap.Decode(codec, info);
+        var rotated = ApplyOrientation(decoded, codec.EncodedOrigin);
+
+        if (rotated is null)
+            return decoded;
+
+        decoded.Dispose();
+        return rotated;
+    }
+
+    private static byte[] EncodeScaled(SKBitmap bitmap, int minSize, bool square)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(minSize);
 
         var shortEdge = Math.Min(bitmap.Width, bitmap.Height);
         var target = Math.Min(minSize, shortEdge);          // kein Upscaling
@@ -116,5 +126,3 @@ public class ImageProcessor(IImageRepository imageRepository, IFileProcessor fil
         return rotated;
     }
 }
-
-

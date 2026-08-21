@@ -6,7 +6,7 @@ public interface IFileProcessor
     
     Task<Tuple<string, string, string>> SaveImageAsync(Guid id, int table, byte[] original, byte[] display, byte[] thumbnail, CancellationToken cancellationToken);
 
-    Task<byte[]> LoadDisplayAsync(Guid id, int table, CancellationToken cancellationToken);
+    string GetDisplayPath(Guid id, int table);
 
-    Task<byte[]> LoadThumbnailAsync(Guid id, int table, CancellationToken cancellationToken);
+    string GetThumbnailPath(Guid id, int table);
 }
