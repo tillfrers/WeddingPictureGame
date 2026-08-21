@@ -204,7 +204,6 @@
     "schemas": {
       "UploadResultDto": {
         "type": "object",
-        "x-abstract": true,
         "additionalProperties": false,
         "properties": {
           "id": {

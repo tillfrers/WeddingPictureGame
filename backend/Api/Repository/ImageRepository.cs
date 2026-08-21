@@ -47,7 +47,7 @@ public class ImageRepository(AppDbContext dbContext, TimeProvider provider) : II
             .. images.Select(i => new GalleryDto
             {
                 Id = i.Id,
-                ThumbnailUrl = $"/api/images/{Constants.Constants.TableNames[table]}/{i.Id}/thumbnail"
+                ThumbnailUrl = $"/api/Image/{Constants.Constants.TableNames[table]}/{i.Id}/thumbnail"
             })
         ], total);
     }

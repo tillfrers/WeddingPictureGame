@@ -1,3 +1,3 @@
 ﻿namespace Api.Dto;
 
-public abstract record UploadResultDto(Guid Id);
+public sealed record UploadResultDto(Guid Id);

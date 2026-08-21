@@ -2,5 +2,5 @@
 
 public interface IImageProcessor
 {
-    public Task TransformAndSaveAsync(IFormFile file, int table, CancellationToken cancellationToken = default);
+    public Task<Guid> TransformAndSaveAsync(IFormFile file, int table, CancellationToken cancellationToken = default);
 }

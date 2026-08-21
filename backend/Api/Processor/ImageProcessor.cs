@@ -5,7 +5,7 @@ namespace Api.Processor;
 
 public class ImageProcessor(IImageRepository imageRepository, IFileProcessor fileProcessor) : IImageProcessor
 {
-    public async Task TransformAndSaveAsync(IFormFile file, int table, CancellationToken cancellationToken = default)
+    public async Task<Guid> TransformAndSaveAsync(IFormFile file, int table, CancellationToken cancellationToken = default)
     {
         var id = Guid.NewGuid();
         using var imageStream = new MemoryStream((int)file.Length);
@@ -23,6 +23,8 @@ public class ImageProcessor(IImageRepository imageRepository, IFileProcessor fil
         var result = await fileProcessor.SaveImageAsync(id, table, bytes, displayTask.Result, thumbnailTask.Result, cancellationToken);
 
         await imageRepository.SaveImageAsync(id, table, result.Item1, result.Item2, result.Item3, cancellationToken: cancellationToken);
+
+        return id;
     }
 
     private static SKBitmap DecodeAndOrient(byte[] source)

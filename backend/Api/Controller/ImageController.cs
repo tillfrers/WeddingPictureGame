@@ -34,9 +34,9 @@ public sealed class ImageController(IImageProcessor imageProcessor, IImageReposi
         if (!AllowedExtensions.Contains(extension))
             return BadRequest($"Format '{extension}' nicht erlaubt.");
         
-        await imageProcessor.TransformAndSaveAsync(file, Constants.Constants.TableIds[table], cancellationToken);
+        var id = await imageProcessor.TransformAndSaveAsync(file, Constants.Constants.TableIds[table], cancellationToken);
 
-        return Ok();
+        return Created($"/api/Image/{table}/{id}/display", new UploadResultDto(id));
     }
     
     [HttpGet("{table}/gallery")]
