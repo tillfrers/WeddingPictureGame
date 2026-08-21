@@ -212,7 +212,7 @@ export class ImageClient implements IImageClient {
     }
 }
 
-export abstract class UploadResultDto implements IUploadResultDto {
+export class UploadResultDto implements IUploadResultDto {
     id?: string;
 
     constructor(data?: IUploadResultDto) {
@@ -232,7 +232,9 @@ export abstract class UploadResultDto implements IUploadResultDto {
 
     static fromJS(data: any): UploadResultDto {
         data = typeof data === 'object' ? data : {};
-        throw new Error("The abstract class 'UploadResultDto' cannot be instantiated.");
+        let result = new UploadResultDto();
+        result.init(data);
+        return result;
     }
 
     toJSON(data?: any) {
