@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Api.Repository;
 
-public class ImageRepository(AppDbContext dbContext, IFileProcessor fileProcessor, TimeProvider provider) : IImageRepository
+public class ImageRepository(AppDbContext dbContext, TimeProvider provider) : IImageRepository
 {
     public async Task SaveImageAsync(Guid id, int table, string original, string display, string thumbnail, CancellationToken cancellationToken = default)
     {

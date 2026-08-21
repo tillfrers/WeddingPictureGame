@@ -7,12 +7,17 @@ namespace Api.Controller;
 
 [ApiController]
 [Route("api/[controller]")]
+[Produces("application/json")]
 public sealed class ImageController(IImageProcessor imageProcessor, IImageRepository imageRepository, IFileProcessor fileProcessor) : ControllerBase
 {
     private static readonly HashSet<string> AllowedExtensions =
         [".jpg", ".jpeg", ".png"];
 
     [HttpPost("{table}/upload")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(31_457_280)]
+    [ProducesResponseType<UploadResultDto>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Upload(string table, IFormFile file, CancellationToken cancellationToken)
     {
         if (file.Length == 0)
@@ -35,6 +40,8 @@ public sealed class ImageController(IImageProcessor imageProcessor, IImageReposi
     }
     
     [HttpGet("{table}/gallery")]
+    [ProducesResponseType<PagedResult<GalleryDto>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<PagedResult<GalleryDto>>> GetGallery(string table, [FromQuery] int page, CancellationToken cancellationToken)
     {
         if (page <= 0)
@@ -51,6 +58,9 @@ public sealed class ImageController(IImageProcessor imageProcessor, IImageReposi
     private const string ImmutableCacheControl = "public, max-age=31536000, immutable";
 
     [HttpGet("{table}/{id}/display")]
+    [Produces("image/jpeg")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult GetDisplay(string table, string id)
     {
         if (!Constants.Constants.TableIds.TryGetValue(table, out var tableId))
@@ -74,6 +84,9 @@ public sealed class ImageController(IImageProcessor imageProcessor, IImageReposi
     }
 
     [HttpGet("{table}/{id}/thumbnail")]
+    [Produces("image/jpeg")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult GetThumbnail(string table, string id)
     {
         if (!Constants.Constants.TableIds.TryGetValue(table, out var tableId))

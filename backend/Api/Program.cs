@@ -6,13 +6,23 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
 builder.Services.AddControllers();
+builder.Services.AddOpenApiDocument(options =>
+{
+    options.Title = "WeddingPictureGame API";
+    options.Version = "v1";
+});
 builder.Services.AddServices(builder.Configuration);
 
 builder.Services.Configure<FormOptions>(o => o.MemoryBufferThreshold = 24 * 1024 * 1024);
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseOpenApi();      
+    app.UseSwaggerUi();    
+}
 
 using (var scope = app.Services.CreateScope())
 {
@@ -21,11 +31,6 @@ using (var scope = app.Services.CreateScope())
     
     var fileProcessor = scope.ServiceProvider.GetRequiredService<IFileProcessor>();
     fileProcessor.EnsurePathExists();
-}
-
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
 }
 
 app.UseHttpsRedirection();

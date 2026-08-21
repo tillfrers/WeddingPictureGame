@@ -1,0 +1,21 @@
+﻿{
+  "runtime": "Net100",
+  "documentGenerator": {
+    "aspNetCoreToOpenApi": {
+      "project": "Api.csproj",
+      "noBuild": true,
+      "output": "../../frontend/openapi.json"
+    }
+  },
+  "codeGenerators": {
+    "openApiToTypeScriptClient": {
+      "template": "Fetch",
+      "typeScriptVersion": 5.0,
+      "className": "{controller}Client",
+      "generateClientInterfaces": true,
+      "dateTimeType": "String",
+      "nullValue": "Undefined",
+      "output": "../../frontend/src/lib/api/client.ts"
+    }
+  }
+}
