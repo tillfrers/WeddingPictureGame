@@ -1,5 +1,6 @@
 using Api;
 using Api.Persistence;
+using Api.Processor;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,6 +18,9 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+    
+    var fileProcessor = scope.ServiceProvider.GetRequiredService<IFileProcessor>();
+    fileProcessor.EnsurePathExists();
 }
 
 if (app.Environment.IsDevelopment())

@@ -3,21 +3,30 @@ using SkiaSharp;
 
 namespace Api.Processor;
 
-public class ImageProcessor(IImageRepository imageRepository) : IImageProcessor
+public class ImageProcessor(IImageRepository imageRepository, IFileProcessor fileProcessor) : IImageProcessor
 {
     public async Task TransformAndSaveAsync(IFormFile file, int table, CancellationToken cancellationToken = default)
     {
+        var id = Guid.NewGuid();
         using var imageStream = new MemoryStream(); 
         await file.CopyToAsync(imageStream, cancellationToken);
         imageStream.Position = 0;
         
-        var thumbnail = CreateThumbnailAsync(imageStream.ToArray());
+        var bytes = imageStream.ToArray(); 
+        var displayTask   = Task.Run(() => RescaleImage(bytes, 1080, false), cancellationToken);
+        var thumbnailTask = Task.Run(() => RescaleImage(bytes, 400,  true),  cancellationToken);
+
+        await Task.WhenAll(displayTask, thumbnailTask);
         
-        await imageRepository.SaveImageAsync(table, imageStream.ToArray(), thumbnail.ToArray(), cancellationToken: cancellationToken);
+        var result = await fileProcessor.SaveImageAsync(id, table, imageStream.ToArray(), displayTask.Result, thumbnailTask.Result, cancellationToken);
+        
+        await imageRepository.SaveImageAsync(id, table, result.Item1, result.Item2, result.Item3, cancellationToken: cancellationToken);
     }
 
-    private static byte[] CreateThumbnailAsync(byte[] source, int size = 300, int quality = 80)
+    private static byte[] RescaleImage(byte[] source, int minSize, bool square)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(minSize);
+
         using var data = SKData.CreateCopy(source);
         using var codec = SKCodec.Create(data)
             ?? throw new InvalidOperationException("Bildformat nicht lesbar.");
@@ -25,24 +34,46 @@ public class ImageProcessor(IImageRepository imageRepository) : IImageProcessor
         var info = new SKImageInfo(codec.Info.Width, codec.Info.Height,
                                    SKColorType.Bgra8888, SKAlphaType.Premul);
 
-        using var decoded  = SKBitmap.Decode(codec, info);
-        using var rotated  = ApplyOrientation(decoded, codec.EncodedOrigin);
+        using var decoded = SKBitmap.Decode(codec, info);
+        using var rotated = ApplyOrientation(decoded, codec.EncodedOrigin);
         var bitmap = rotated ?? decoded;
-        
-        var edge = Math.Min(bitmap.Width, bitmap.Height);
-        var src  = SKRectI.Create((bitmap.Width - edge) / 2,
-                                  (bitmap.Height - edge) / 2, edge, edge);
 
-        using var surface = SKSurface.Create(
-            new SKImageInfo(size, size, SKColorType.Bgra8888, SKAlphaType.Premul));
+        var shortEdge = Math.Min(bitmap.Width, bitmap.Height);
+        var target = Math.Min(minSize, shortEdge);          // kein Upscaling
+
+        SKRectI src;
+        SKImageInfo dstInfo;
+
+        if (square)
+        {
+            src = SKRectI.Create((bitmap.Width  - shortEdge) / 2,
+                                 (bitmap.Height - shortEdge) / 2,
+                                 shortEdge, shortEdge);
+            dstInfo = new SKImageInfo(target, target,
+                                      SKColorType.Bgra8888, SKAlphaType.Premul);
+        }
+        else
+        {
+            src = SKRectI.Create(0, 0, bitmap.Width, bitmap.Height);
+
+            var scale = (double)target / shortEdge;
+            var w = Math.Max(1, (int)Math.Round(bitmap.Width  * scale));
+            var h = Math.Max(1, (int)Math.Round(bitmap.Height * scale));
+
+            dstInfo = new SKImageInfo(w, h, SKColorType.Bgra8888, SKAlphaType.Premul);
+        }
+
+        using var surface = SKSurface.Create(dstInfo);
+        surface.Canvas.Clear(SKColors.White);               // JPEG kennt kein Alpha
 
         using var image = SKImage.FromBitmap(bitmap);
-        surface.Canvas.DrawImage(image, src, SKRect.Create(size, size),
-            new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
+        surface.Canvas.DrawImage(image, src,
+            SKRect.Create(dstInfo.Width, dstInfo.Height),
+            new SKSamplingOptions(SKCubicResampler.Mitchell));
         surface.Canvas.Flush();
 
         using var snapshot = surface.Snapshot();
-        using var encoded  = snapshot.Encode(SKEncodedImageFormat.Webp, quality);
+        using var encoded  = snapshot.Encode(SKEncodedImageFormat.Jpeg, 80);
         return encoded.ToArray();
     }
 

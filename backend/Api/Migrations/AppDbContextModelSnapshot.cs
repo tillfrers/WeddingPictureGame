@@ -31,16 +31,20 @@ namespace Api.Migrations
                     b.Property<DateTime>("DateCreated")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<byte[]>("Image")
+                    b.Property<string>("PathDisplay")
                         .IsRequired()
-                        .HasColumnType("bytea");
+                        .HasColumnType("text");
+
+                    b.Property<string>("PathOriginal")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PathThumbnail")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("Tables")
                         .HasColumnType("integer");
-
-                    b.Property<byte[]>("Thumbnail")
-                        .IsRequired()
-                        .HasColumnType("bytea");
 
                     b.HasKey("Id");
 

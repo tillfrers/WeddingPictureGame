@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260819191638_Initial")]
+    [Migration("20260821195829_Initial")]
     partial class Initial
     {
         /// <inheritdoc />
@@ -34,16 +34,20 @@ namespace Api.Migrations
                     b.Property<DateTime>("DateCreated")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<byte[]>("Image")
+                    b.Property<string>("PathDisplay")
                         .IsRequired()
-                        .HasColumnType("bytea");
+                        .HasColumnType("text");
+
+                    b.Property<string>("PathOriginal")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PathThumbnail")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("Tables")
                         .HasColumnType("integer");
-
-                    b.Property<byte[]>("Thumbnail")
-                        .IsRequired()
-                        .HasColumnType("bytea");
 
                     b.HasKey("Id");
 

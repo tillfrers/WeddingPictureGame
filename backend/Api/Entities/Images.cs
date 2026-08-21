@@ -9,9 +9,11 @@ public class Images
     [Range(1, 8)]
     public int Tables { get; set; }
 
-    public byte[] Image { get; set; } = [];
+    public required string PathOriginal { get; set; }
     
-    public byte[] Thumbnail { get; set; } = [];
+    public required string PathDisplay { get; set; }
+    
+    public required string PathThumbnail { get; set; }
     
     public DateTime DateCreated { get; set; } = DateTime.UtcNow;
 }

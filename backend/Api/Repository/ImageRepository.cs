@@ -1,20 +1,22 @@
 ﻿using Api.Dto;
 using Api.Entities;
 using Api.Persistence;
+using Api.Processor;
 using Microsoft.EntityFrameworkCore;
 
 namespace Api.Repository;
 
-public class ImageRepository(AppDbContext dbContext, TimeProvider provider) : IImageRepository
+public class ImageRepository(AppDbContext dbContext, IFileProcessor fileProcessor, TimeProvider provider) : IImageRepository
 {
-    public async Task SaveImageAsync(int table, byte[] image, byte[] thumbnail, CancellationToken cancellationToken = default)
+    public async Task SaveImageAsync(Guid id, int table, string original, string display, string thumbnail, CancellationToken cancellationToken = default)
     {
         var images = new Images
         {
-            Id = Guid.NewGuid(),
+            Id = id,
             Tables = table,
-            Image = image,
-            Thumbnail = thumbnail,
+            PathOriginal = original,
+            PathDisplay = display,
+            PathThumbnail = thumbnail,
             DateCreated = provider.GetUtcNow().DateTime.ToUniversalTime()
         };
         
@@ -45,7 +47,7 @@ public class ImageRepository(AppDbContext dbContext, TimeProvider provider) : II
             .. images.Select(i => new GalleryDto
             {
                 Id = i.Id,
-                Thumbnail = i.Thumbnail,
+                ThumbnailUrl = $"/api/images/{Constants.Constants.TableNames[table]}/{i.Id}/thumbnail"
             })
         ], total);
     }
