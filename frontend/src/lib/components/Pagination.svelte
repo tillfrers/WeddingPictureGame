@@ -12,28 +12,39 @@
 		hasNext: boolean;
 		onNavigate: (page: number) => void;
 	} = $props();
+
+	const lastPage = $derived(Math.max(totalPages, 1));
 </script>
 
 <nav class="pagination" aria-label="Seiten">
+	<button disabled={page <= 1} onclick={() => onNavigate(1)} aria-label="Erste Seite">
+		<Icon name="chevron-first" size={20} />
+	</button>
 	<button disabled={page <= 1} onclick={() => onNavigate(page - 1)} aria-label="Vorherige Seite">
 		<Icon name="chevron-left" size={20} />
 	</button>
-	<span>Seite {page} / {Math.max(totalPages, 1)}</span>
+	<span>Seite {page} / {lastPage}</span>
 	<button disabled={!hasNext} onclick={() => onNavigate(page + 1)} aria-label="Nächste Seite">
 		<Icon name="chevron-right" size={20} />
+	</button>
+	<button disabled={!hasNext} onclick={() => onNavigate(lastPage)} aria-label="Letzte Seite">
+		<Icon name="chevron-last" size={20} />
 	</button>
 </nav>
 
 <style>
+	/* Enger als bei drei Elementen: mit den Sprungtasten für erste und letzte
+	   Seite müssen fünf Bedienelemente auch auf 320px breite Displays passen. */
 	.pagination {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 18px;
-		padding: 10px 16px;
+		gap: 8px;
+		padding: 10px 8px;
 	}
 
 	button {
+		flex: none;
 		width: 40px;
 		height: 40px;
 		border-radius: 50%;
@@ -52,7 +63,8 @@
 	}
 
 	span {
-		min-width: 110px;
+		/* Feste Mindestbreite, damit die Tasten beim Blättern nicht wandern. */
+		min-width: 84px;
 		text-align: center;
 		font-variant-numeric: tabular-nums;
 		color: var(--color-text-muted);

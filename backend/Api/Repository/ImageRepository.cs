@@ -37,7 +37,7 @@ public class ImageRepository(AppDbContext dbContext, TimeProvider provider) : II
     
     private static async Task<(IReadOnlyList<GalleryDto>, int)> PageAsync(IQueryable<Images> query, int page, CancellationToken cancellationToken)
     {
-        var ordered = query.OrderBy(i => i.DateCreated).ThenBy(i => i.Id);
+        var ordered = query.OrderByDescending(i => i.DateCreated).ThenBy(i => i.Id);
 
         var total = await ordered.CountAsync(cancellationToken);
 

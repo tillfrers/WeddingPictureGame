@@ -91,6 +91,10 @@
 	.viewer {
 		position: fixed;
 		inset: 0;
+		/* Wischgesten wertet der Viewer selbst aus. Ohne das würde ein
+		   senkrechter Zug hier die Aktualisieren-Geste des Browsers auslösen
+		   und den Gast mitten im Bild aus der Galerie werfen. */
+		touch-action: none;
 		z-index: 60;
 		background: rgba(10, 8, 6, 0.94);
 		display: flex;

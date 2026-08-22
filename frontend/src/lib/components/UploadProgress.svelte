@@ -62,6 +62,9 @@
 	.backdrop {
 		position: fixed;
 		inset: 0;
+		/* Ein Zug nach unten während des Uploads würde sonst die
+		   Aktualisieren-Geste auslösen und die laufenden Uploads abbrechen. */
+		touch-action: none;
 		background: rgba(20, 16, 12, 0.55);
 		z-index: 50;
 		display: flex;

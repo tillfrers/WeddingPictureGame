@@ -45,6 +45,95 @@
 	let toast = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
+	// Gescrollt wird der Container, nicht das Fenster (siehe app.css). SvelteKits
+	// Scroll-Handling greift damit nicht mehr - beim Blättern selbst nach oben.
+	let scroller: HTMLElement | undefined = $state();
+
+	$effect(() => {
+		page;
+		scroller?.scrollTo({ top: 0 });
+	});
+
+	// Zum Aktualisieren nach unten ziehen. Die eingebaute Geste des Browsers
+	// hängt am Wurzeldokument, und das scrollt hier bewusst nicht (sonst wandert
+	// der Upload-Button, siehe app.css) - also machen wir sie selbst.
+	const ZIEH_AUSLOESER = 70; // ab dieser Zugdistanz wird geladen
+	const ZIEH_MAXIMUM = 110; // weiter folgt der Indikator nicht
+	const ZIEH_START = 8; // darunter gilt es noch als normales Scrollen
+
+	let ziehen = $state(0);
+	let aktualisiert = $state(false);
+
+	$effect(() => {
+		const el = scroller;
+		if (!el) return;
+
+		let startY = 0;
+		let aktiv = false;
+
+		const onStart = (e: TouchEvent) => {
+			if (e.touches.length !== 1) return;
+			startY = e.touches[0].clientY;
+			aktiv = false;
+		};
+
+		const onMove = (e: TouchEvent) => {
+			if (aktualisiert || e.touches.length !== 1) return;
+
+			const dy = e.touches[0].clientY - startY;
+
+			// Erst ab einer Mindestdistanz übernehmen, sonst fühlt sich jedes
+			// leichte Antippen beim Scrollen wie ein Zug an.
+			if (!aktiv) {
+				if (dy < ZIEH_START || el.scrollTop > 0) return;
+				aktiv = true;
+			}
+
+			if (dy <= 0) {
+				aktiv = false;
+				ziehen = 0;
+				return;
+			}
+
+			// Gedämpft mitlaufen lassen, damit der Zug spürbar Widerstand hat.
+			ziehen = Math.min(dy * 0.5, ZIEH_MAXIMUM);
+			e.preventDefault();
+		};
+
+		const onEnd = async () => {
+			if (!aktiv) return;
+			aktiv = false;
+
+			const ausgeloest = ziehen >= ZIEH_AUSLOESER;
+			ziehen = 0;
+
+			if (!ausgeloest || aktualisiert) return;
+
+			aktualisiert = true;
+			try {
+				// Mindestlaufzeit, sonst blitzt der Indikator bei schnellem
+				// Backend nur kurz auf und die Geste wirkt wirkungslos.
+				await Promise.all([invalidate('app:gallery'), new Promise((r) => setTimeout(r, 400))]);
+			} finally {
+				aktualisiert = false;
+			}
+		};
+
+		// touchmove ausdrücklich nicht passiv, sonst lässt sich das Scrollen des
+		// Containers während des Zugs nicht unterbinden.
+		el.addEventListener('touchstart', onStart, { passive: true });
+		el.addEventListener('touchmove', onMove, { passive: false });
+		el.addEventListener('touchend', onEnd);
+		el.addEventListener('touchcancel', onEnd);
+
+		return () => {
+			el.removeEventListener('touchstart', onStart);
+			el.removeEventListener('touchmove', onMove);
+			el.removeEventListener('touchend', onEnd);
+			el.removeEventListener('touchcancel', onEnd);
+		};
+	});
+
 	const uploadFinished = $derived(
 		uploadItems.length > 0 && uploadItems.every((i) => i.status === 'done' || i.status === 'error')
 	);
@@ -88,12 +177,13 @@
 
 		await invalidate('app:gallery');
 
-		// Bilder werden vom Backend aufsteigend nach Datum sortiert, neue Fotos
-		// landen also auf der letzten Seite - dort hin springen, damit der
-		// Gast seinen Upload sofort sieht.
-		const newTotalPages = gallery.totalPages ?? 1;
-		if (page < newTotalPages) {
-			await goto(`?page=${newTotalPages}`, { replaceState: true });
+		// Bilder werden vom Backend absteigend nach Datum sortiert, neue Fotos
+		// stehen also ganz vorne - zurück auf Seite 1, damit der Gast seinen
+		// Upload sofort sieht. Ist er schon dort, reicht Hochscrollen.
+		if (page > 1) {
+			await goto('?page=1', { replaceState: true });
+		} else {
+			scroller?.scrollTo({ top: 0 });
 		}
 	}
 
@@ -127,35 +217,51 @@
 		<h1>{title}</h1>
 	</header>
 
-	<main>
-		{#if items.length === 0}
-			<div class="empty" in:fade={{ duration: 200 }}>
-				<span class="emoji">📷</span>
-				{#if canUpload}
-					<p>Noch keine Fotos an diesem Tisch.</p>
-					<p class="hint">Sei die/der Erste und lade ein Bild hoch!</p>
-				{:else}
-					<p>Noch keine Fotos vorhanden.</p>
-					<p class="hint">Sobald die Gäste hochladen, erscheinen sie hier.</p>
-				{/if}
+	<div class="scrollbereich">
+		{#if ziehen > 0 || aktualisiert}
+			<div
+				class="ziehindikator"
+				class:laeuft={aktualisiert}
+				class:bereit={ziehen >= ZIEH_AUSLOESER}
+				style="--zug: {aktualisiert ? ZIEH_AUSLOESER : ziehen}px; --dreh: {Math.round(
+					ziehen * 2.5
+				)}deg"
+				transition:fade={{ duration: 150 }}
+			>
+				<Icon name="refresh" size={20} />
 			</div>
-		{:else}
-			<div class="grid" in:fade={{ duration: 200 }}>
-				{#each items as item, i (item.id)}
-					<button class="thumb" onclick={() => openViewer(i)} aria-label="Bild vergrößern">
-						<img src={item.thumbnailUrl} alt="" loading="lazy" />
-					</button>
-				{/each}
-			</div>
-
-			<Pagination
-				{page}
-				totalPages={gallery.totalPages ?? 1}
-				hasNext={gallery.hasNext ?? false}
-				onNavigate={goToPage}
-			/>
 		{/if}
-	</main>
+
+		<main bind:this={scroller}>
+			{#if items.length === 0}
+				<div class="empty" in:fade={{ duration: 200 }}>
+					<span class="emoji">📷</span>
+					{#if canUpload}
+						<p>Noch keine Fotos an diesem Tisch.</p>
+						<p class="hint">Sei die/der Erste und lade ein Bild hoch!</p>
+					{:else}
+						<p>Noch keine Fotos vorhanden.</p>
+						<p class="hint">Sobald die Gäste hochladen, erscheinen sie hier.</p>
+					{/if}
+				</div>
+			{:else}
+				<div class="grid" in:fade={{ duration: 200 }}>
+					{#each items as item, i (item.id)}
+						<button class="thumb" onclick={() => openViewer(i)} aria-label="Bild vergrößern">
+							<img src={item.thumbnailUrl} alt="" loading="lazy" />
+						</button>
+					{/each}
+				</div>
+
+				<Pagination
+					{page}
+					totalPages={gallery.totalPages ?? 1}
+					hasNext={gallery.hasNext ?? false}
+					onNavigate={goToPage}
+				/>
+			{/if}
+		</main>
+	</div>
 
 	{#if canUpload}
 		<button class="fab" onclick={() => (sheetOpen = true)} aria-label="Bilder hochladen">
@@ -182,15 +288,14 @@
 
 <style>
 	.page {
-		min-height: 100dvh;
+		height: 100dvh;
 		display: flex;
 		flex-direction: column;
 	}
 
+	/* Steht als Flex-Geschwister über dem Scroller von selbst fest - kein
+	   position: sticky nötig. */
 	header {
-		position: sticky;
-		top: 0;
-		z-index: 10;
 		padding: calc(14px + var(--safe-top)) calc(20px + var(--safe-right)) 14px
 			calc(20px + var(--safe-left));
 		background: var(--color-bg);
@@ -203,14 +308,71 @@
 		letter-spacing: 0.02em;
 	}
 
+	/* Bezugsrahmen für den Zieh-Indikator: der muss über dem Scroller liegen,
+	   ohne mit dessen Inhalt mitzuscrollen. */
+	.scrollbereich {
+		position: relative;
+		flex: 1;
+		/* Ohne min-height:0 wächst der Flex-Kasten mit dem Inhalt statt zu
+		   scrollen - dann scrollt <main> nie. */
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.ziehindikator {
+		position: absolute;
+		top: 0;
+		left: 50%;
+		z-index: 15;
+		margin-left: -18px;
+		/* Startet außerhalb und wandert mit dem Zug herein. */
+		margin-top: -44px;
+		transform: translateY(var(--zug, 0px));
+		width: 36px;
+		height: 36px;
+		border-radius: 50%;
+		border: 1px solid var(--color-border);
+		background: var(--color-surface);
+		box-shadow: var(--shadow-soft);
+		color: var(--color-text-muted);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		pointer-events: none;
+	}
+
+	/* Ab der Auslöseschwelle: Farbe zeigt an, dass Loslassen jetzt lädt. */
+	.ziehindikator.bereit,
+	.ziehindikator.laeuft {
+		color: var(--color-accent);
+		border-color: var(--color-accent-dark);
+	}
+
+	.ziehindikator :global(svg) {
+		transform: rotate(var(--dreh, 0deg));
+	}
+
+	.ziehindikator.laeuft :global(svg) {
+		animation: drehen 0.8s linear infinite;
+	}
+
+	@keyframes drehen {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	/* Der scrollende Bereich der Seite - siehe overflow: hidden in app.css. */
 	main {
 		flex: 1;
-		/* Der untere Abstand hält den fixierten Upload-Button frei (60px hoch,
-		   24px vom Rand) plus Reserve: blendet ein mobiler Browser beim Scrollen
-		   seine Leiste aus, wandert der Button gegenüber dem Seiteninhalt kurz
-		   nach oben. Vorher blieben nur 16px Luft, dabei schob er sich über die
-		   Seitennavigation. */
-		padding: 14px calc(10px + var(--safe-right)) calc(140px + var(--safe-bottom))
+		overflow-y: auto;
+		/* Bewusst kein overscroll-behavior: contain - sonst bleibt das
+		   Überziehen am oberen Rand hier hängen und der Browser bekommt die
+		   Zum-Aktualisieren-Geste nie zu sehen. */
+		/* Hält den fixierten Upload-Button frei (60px hoch, 24px vom Rand),
+		   damit er die Seitennavigation nicht überdeckt. */
+		padding: 14px calc(10px + var(--safe-right)) calc(104px + var(--safe-bottom))
 			calc(10px + var(--safe-left));
 	}
 
@@ -272,10 +434,11 @@
 	.fab {
 		position: fixed;
 		right: calc(20px + var(--safe-right));
-		/* max() statt Addition: der Button soll den Home-Indicator freilassen,
-		   aber nicht um dessen volle Höhe nach oben springen, sobald die
-		   Browserleiste beim Scrollen verschwindet. */
-		bottom: max(24px, calc(var(--safe-bottom) + 6px));
+		/* Bewusst ein fester Wert ohne --safe-bottom: env(safe-area-inset-bottom)
+		   kippt auf manchen Geräten zusammen mit der Browserleiste, und jeder
+		   solche Sprung wäre am fixierten Button sofort sichtbar. Der Abstand
+		   muss konstant sein. */
+		bottom: 24px;
 		width: 60px;
 		height: 60px;
 		border-radius: 50%;

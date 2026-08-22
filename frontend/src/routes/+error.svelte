@@ -9,20 +9,24 @@
 		<span class="icon"><Icon name="alert" size={44} /></span>
 		<h1>Ups!</h1>
 		<p>{page.error?.message ?? 'Dieser Tisch konnte nicht gefunden werden.'}</p>
-		<p class="hint">Bitte überprüfe den QR-Code oder frage am Empfang nach.</p>
+		<p class="hint">Bitte überprüfe den QR-Code oder suche Till für Hilfe.</p>
 	</div>
 </main>
 
 <style>
+	/* Feste Hoehe statt min-height, weil body nicht mehr scrollt (app.css):
+	   nur so kann dieser Container ueberlangen Inhalt selbst scrollen.
+	   Zentriert wird ueber margin:auto der Karte statt align-items, sonst
+	   schneidet Flexbox bei Ueberlaenge den oberen Rand ab. */
 	main {
-		min-height: 100dvh;
+		height: 100dvh;
+		overflow-y: auto;
 		display: flex;
-		align-items: center;
-		justify-content: center;
 		padding: 24px calc(24px + var(--safe-right)) 24px calc(24px + var(--safe-left));
 	}
 
 	.card {
+		margin: auto;
 		max-width: 380px;
 		text-align: center;
 		background: var(--color-surface);

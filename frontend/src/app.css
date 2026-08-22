@@ -29,6 +29,12 @@
 html,
 body {
 	height: 100%;
+	/* Gescrollt wird nicht das Wurzeldokument, sondern ein Container innerhalb
+	   der Seite. Mobile Browser blenden ihre Adressleiste nämlich nur beim
+	   Scrollen des Wurzeldokuments ein und aus - und genau das ändert die Höhe
+	   des Layout-Viewports, an dem `position: fixed` hängt. Ohne diese Zeile
+	   springt der Upload-Button beim Scrollen. */
+	overflow: hidden;
 }
 
 body {
@@ -38,7 +44,9 @@ body {
 	font-family:
 		-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 	-webkit-font-smoothing: antialiased;
-	overscroll-behavior-y: none;
+	/* Kein overscroll-behavior: das Überziehen soll vom Galerie-Container bis
+	   hierher durchschlagen, damit der Browser sein gewohntes
+	   "nach unten wischen = neu laden" anbieten kann. */
 	touch-action: manipulation;
 }
 
