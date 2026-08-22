@@ -2,7 +2,7 @@
 
 public static class Constants
 {
-    public const int PageSizeGallery = 15;
+    public const int PageSizeGallery = 12;
     
     public static readonly Dictionary<int, string> TableNames = new()
     {

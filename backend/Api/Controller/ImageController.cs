@@ -1,14 +1,27 @@
-﻿using Api.Dto;
+﻿using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using Api.Dto;
+using Api.Options;
 using Api.Processor;
 using Api.Repository;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 
 namespace Api.Controller;
 
 [ApiController]
 [Route("api/[controller]")]
 [ProducesErrorResponseType(typeof(ProblemDetails))]
-public sealed class ImageController(IImageProcessor imageProcessor, IImageRepository imageRepository, IFileProcessor fileProcessor) : ControllerBase
+public sealed class ImageController(
+    IImageProcessor imageProcessor, 
+    IImageRepository imageRepository, 
+    IFileProcessor fileProcessor,
+    IOptions<CapabilityHashOptions> options) : ControllerBase
 {
     private const long MaxFileSize = 31_457_280; // 30 MB
     private const string ImmutableCacheControl = "public, max-age=31536000, immutable";
@@ -17,6 +30,34 @@ public sealed class ImageController(IImageProcessor imageProcessor, IImageReposi
     private static readonly HashSet<string> AllowedExtensions =
         [".jpg", ".jpeg", ".png"];
 
+    [HttpPost("redeem")]
+    [AllowAnonymous]
+    [EnableRateLimiting("auth")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    public async Task<IActionResult> Redeem([FromBody] RedeemDto dto)
+    {
+        var candidate = SHA256.HashData(Encoding.UTF8.GetBytes(dto.Token));
+        var expected = Convert.FromHexString(options.Value.CapabilityHash);
+
+        if (!CryptographicOperations.FixedTimeEquals(candidate, expected))
+            return Problem(
+                detail: "Ungültiger Zugangslink",
+                statusCode: StatusCodes.Status401Unauthorized,
+                title: "Nicht authentifiziert");
+
+        var identity = new ClaimsIdentity(
+            [new Claim(ClaimTypes.Name, "Gast")],
+            CookieAuthenticationDefaults.AuthenticationScheme);
+
+        await HttpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(identity),
+            new AuthenticationProperties { IsPersistent = true });
+
+        return NoContent();
+    }
+    
     [HttpPost("{table}/upload")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(MaxFileSize)]
@@ -58,6 +99,27 @@ public sealed class ImageController(IImageProcessor imageProcessor, IImageReposi
         var result = await imageRepository.GetGalleryAsync(id, page, cancellationToken);
 
         return Ok(new PagedResult<GalleryDto>(result.Item1, page, Constants.Constants.PageSizeGallery, result.Item2, id));
+    }
+    
+    [HttpGet("gallery")]
+    [ProducesResponseType<PagedResult<GalleryDto>>(StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    public async Task<ActionResult<PagedResult<GalleryDto>>> GetGalleryAll([FromQuery] int page, CancellationToken cancellationToken)
+    {
+        if (page <= 0)
+            return BadRequestProblem("Falscher Seiten Parameter");
+
+        var galleryDtos = new List<GalleryDto>();
+        var count = 0;
+        foreach (var tableId in  Constants.Constants.TableIds)
+        {
+            var result = await imageRepository.GetGalleryAsync(tableId.Value, page, cancellationToken);
+            galleryDtos.AddRange(result.Item1);
+            
+            count  += result.Item2;
+        }
+
+        return Ok(new PagedResult<GalleryDto>(galleryDtos, page, Constants.Constants.PageSizeGallery, count));
     }
 
     [HttpGet("{table}/{id}/display")]

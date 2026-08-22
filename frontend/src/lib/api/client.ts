@@ -9,9 +9,13 @@
 
 export interface IImageClient {
 
+    redeem(dto: RedeemDto): Promise<void>;
+
     upload(table: string, file: FileParameter | null | undefined): Promise<UploadResultDto>;
 
     getGallery(table: string, page: number | undefined): Promise<PagedResultOfGalleryDto>;
+
+    getGalleryAll(page: number | undefined): Promise<PagedResultOfGalleryDto>;
 
     getDisplay(table: string, id: string): Promise<FileResponse>;
 
@@ -26,6 +30,47 @@ export class ImageClient implements IImageClient {
     constructor(baseUrl?: string, http?: { fetch(url: RequestInfo, init?: RequestInit): Promise<Response> }) {
         this.http = http ? http : window as any;
         this.baseUrl = baseUrl ?? "";
+    }
+
+    redeem(dto: RedeemDto): Promise<void> {
+        let url_ = this.baseUrl + "/api/Image/redeem";
+        url_ = url_.replace(/[?&]$/, "");
+
+        const content_ = JSON.stringify(dto);
+
+        let options_: RequestInit = {
+            body: content_,
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processRedeem(_response);
+        });
+    }
+
+    protected processRedeem(response: Response): Promise<void> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 204) {
+            return response.text().then((_responseText) => {
+            return;
+            });
+        } else if (status === 401) {
+            return response.text().then((_responseText) => {
+            let result401: any = null;
+            let resultData401 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result401 = ProblemDetails.fromJS(resultData401);
+            return throwException("A server side error occurred.", status, _responseText, _headers, result401);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<void>(null as any);
     }
 
     upload(table: string, file: FileParameter | null | undefined): Promise<UploadResultDto> {
@@ -108,6 +153,51 @@ export class ImageClient implements IImageClient {
     }
 
     protected processGetGallery(response: Response): Promise<PagedResultOfGalleryDto> {
+        const status = response.status;
+        let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
+        if (status === 200) {
+            return response.text().then((_responseText) => {
+            let result200: any = null;
+            let resultData200 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result200 = PagedResultOfGalleryDto.fromJS(resultData200);
+            return result200;
+            });
+        } else if (status === 400) {
+            return response.text().then((_responseText) => {
+            let result400: any = null;
+            let resultData400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result400 = ProblemDetails.fromJS(resultData400);
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status !== 200 && status !== 204) {
+            return response.text().then((_responseText) => {
+            return throwException("An unexpected server error occurred.", status, _responseText, _headers);
+            });
+        }
+        return Promise.resolve<PagedResultOfGalleryDto>(null as any);
+    }
+
+    getGalleryAll(page: number | undefined): Promise<PagedResultOfGalleryDto> {
+        let url_ = this.baseUrl + "/api/Image/gallery?";
+        if (page === null)
+            throw new globalThis.Error("The parameter 'page' cannot be null.");
+        else if (page !== undefined)
+            url_ += "page=" + encodeURIComponent("" + page) + "&";
+        url_ = url_.replace(/[?&]$/, "");
+
+        let options_: RequestInit = {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            }
+        };
+
+        return this.http.fetch(url_, options_).then((_response: Response) => {
+            return this.processGetGalleryAll(_response);
+        });
+    }
+
+    protected processGetGalleryAll(response: Response): Promise<PagedResultOfGalleryDto> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
         if (status === 200) {
@@ -249,42 +339,6 @@ export class ImageClient implements IImageClient {
     }
 }
 
-export class UploadResultDto implements IUploadResultDto {
-    id?: string;
-
-    constructor(data?: IUploadResultDto) {
-        if (data) {
-            for (var property in data) {
-                if (data.hasOwnProperty(property))
-                    (this as any)[property] = (data as any)[property];
-            }
-        }
-    }
-
-    init(_data?: any) {
-        if (_data) {
-            this.id = _data["id"];
-        }
-    }
-
-    static fromJS(data: any): UploadResultDto {
-        data = typeof data === 'object' ? data : {};
-        let result = new UploadResultDto();
-        result.init(data);
-        return result;
-    }
-
-    toJSON(data?: any) {
-        data = typeof data === 'object' ? data : {};
-        data["id"] = this.id;
-        return data;
-    }
-}
-
-export interface IUploadResultDto {
-    id?: string;
-}
-
 export class ProblemDetails implements IProblemDetails {
     type?: string | undefined;
     title?: string | undefined;
@@ -349,12 +403,84 @@ export interface IProblemDetails {
     [key: string]: any;
 }
 
+export class RedeemDto implements IRedeemDto {
+    token?: string;
+
+    constructor(data?: IRedeemDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.token = _data["token"];
+        }
+    }
+
+    static fromJS(data: any): RedeemDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new RedeemDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["token"] = this.token;
+        return data;
+    }
+}
+
+export interface IRedeemDto {
+    token?: string;
+}
+
+export class UploadResultDto implements IUploadResultDto {
+    id?: string;
+
+    constructor(data?: IUploadResultDto) {
+        if (data) {
+            for (var property in data) {
+                if (data.hasOwnProperty(property))
+                    (this as any)[property] = (data as any)[property];
+            }
+        }
+    }
+
+    init(_data?: any) {
+        if (_data) {
+            this.id = _data["id"];
+        }
+    }
+
+    static fromJS(data: any): UploadResultDto {
+        data = typeof data === 'object' ? data : {};
+        let result = new UploadResultDto();
+        result.init(data);
+        return result;
+    }
+
+    toJSON(data?: any) {
+        data = typeof data === 'object' ? data : {};
+        data["id"] = this.id;
+        return data;
+    }
+}
+
+export interface IUploadResultDto {
+    id?: string;
+}
+
 export class PagedResultOfGalleryDto implements IPagedResultOfGalleryDto {
     items?: GalleryDto[];
     page?: number;
     pageSize?: number;
     totalCount?: number;
-    tableNumber?: number;
+    tableNumber?: number | undefined;
     totalPages?: number;
     hasNext?: boolean;
 
@@ -412,7 +538,7 @@ export interface IPagedResultOfGalleryDto {
     page?: number;
     pageSize?: number;
     totalCount?: number;
-    tableNumber?: number;
+    tableNumber?: number | undefined;
     totalPages?: number;
     hasNext?: boolean;
 }

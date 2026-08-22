@@ -6,6 +6,41 @@
     "version": "v1"
   },
   "paths": {
+    "/api/Image/redeem": {
+      "post": {
+        "tags": [
+          "Image"
+        ],
+        "operationId": "Image_Redeem",
+        "requestBody": {
+          "x-name": "dto",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemDto"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/Image/{table}/upload": {
       "post": {
         "tags": [
@@ -97,6 +132,47 @@
               "format": "int32"
             },
             "x-position": 2
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PagedResultOfGalleryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Image/gallery": {
+      "get": {
+        "tags": [
+          "Image"
+        ],
+        "operationId": "Image_GetGalleryAll",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "x-position": 1
           }
         ],
         "responses": {
@@ -248,16 +324,6 @@
   },
   "components": {
     "schemas": {
-      "UploadResultDto": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "guid"
-          }
-        }
-      },
       "ProblemDetails": {
         "type": "object",
         "additionalProperties": {
@@ -287,6 +353,25 @@
           }
         }
       },
+      "RedeemDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "UploadResultDto": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          }
+        }
+      },
       "PagedResultOfGalleryDto": {
         "type": "object",
         "additionalProperties": false,
@@ -311,7 +396,8 @@
           },
           "tableNumber": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "nullable": true
           },
           "totalPages": {
             "type": "integer",

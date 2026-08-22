@@ -19,6 +19,13 @@ public static class ConfigureServices
         services.AddScoped<IFileProcessor, FileProcessor>();
         
         services.Configure<ImagePathOptions>(configuration);
+        services.Configure<CapabilityHashOptions>(configuration);
+        
+        services.AddOptions<CapabilityHashOptions>()
+            .Bind(configuration)
+            .Validate(o => o.CapabilityHash is { Length: 64 } && o.CapabilityHash.All(Uri.IsHexDigit),
+                "CapabilityToken muss ein 64-stelliger SHA-256-Hex-String sein.")
+            .ValidateOnStart();
         
         services.AddSingleton(TimeProvider.System);
 
