@@ -10,4 +10,6 @@ public interface IImageRepository
     Task<Images> GetImage(Guid id, CancellationToken cancellationToken = default);
     
     Task<(IReadOnlyList<GalleryDto>, int)> GetGalleryAsync(int table, int page, CancellationToken cancellationToken = default);
+
+    Task<(IReadOnlyList<GalleryDto>, int)> GetGalleryAllAsync(int page, CancellationToken cancellationToken = default);
 }

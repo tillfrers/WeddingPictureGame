@@ -4,3 +4,26 @@
 This project was built for my own wedding, nothing more. It isn't configurable and plenty of it is hardcoded — it just needs to work.
 
 It's a simple ASP.NET backend with a Svelte frontend. Wedding guests use the site to upload photos per table as part of a photo challenge. At the end of the wedding, an invite link lets guests browse and download all the photos. This ist strictly a private project.
+
+== Links
+
+Every endpoint except `POST /api/Image/redeem` requires the auth cookie. The
+cookie is handed out in exchange for the capability token, so every link that
+guests receive carries `?token=<capability token>`. The frontend redeems the
+token once and then drops it from the URL, so it never ends up in history,
+bookmarks or shared links.
+
+[cols="1,2"]
+|===
+| Link | Lands on
+
+| `+https://host/<tischcode>?token=…+`
+| Gallery of that table, with upload button — this is what the QR code on the table encodes. `+https://host/?tisch=<tischcode>&token=…+` works as well.
+
+| `+https://host/gallery?token=…+`
+| Gallery across all tables, read-only — the invite link for after the wedding.
+|===
+
+Table codes are the four-digit hex values in `backend/Api/Constants/Constants.cs`
+(table 1 is `9E79`, table 2 is `859D`, …). The token is checked against the
+SHA-256 hash in `CapabilityHash` (`appsettings.json`).

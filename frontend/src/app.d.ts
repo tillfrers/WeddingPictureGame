@@ -5,7 +5,10 @@ declare global {
 		// interface Error {}
 		// interface Locals {}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			/** Index des im Viewer geöffneten Bildes (Shallow Routing). */
+			viewer?: number;
+		}
 		// interface Platform {}
 	}
 }

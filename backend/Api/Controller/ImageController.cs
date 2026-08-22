@@ -109,17 +109,9 @@ public sealed class ImageController(
         if (page <= 0)
             return BadRequestProblem("Falscher Seiten Parameter");
 
-        var galleryDtos = new List<GalleryDto>();
-        var count = 0;
-        foreach (var tableId in  Constants.Constants.TableIds)
-        {
-            var result = await imageRepository.GetGalleryAsync(tableId.Value, page, cancellationToken);
-            galleryDtos.AddRange(result.Item1);
-            
-            count  += result.Item2;
-        }
-
-        return Ok(new PagedResult<GalleryDto>(galleryDtos, page, Constants.Constants.PageSizeGallery, count));
+        var result = await imageRepository.GetGalleryAllAsync(page, cancellationToken);
+        
+        return Ok(new PagedResult<GalleryDto>(result.Item1, page, Constants.Constants.PageSizeGallery, result.Item2));
     }
 
     [HttpGet("{table}/{id}/display")]

@@ -5,4 +5,4 @@
 	let { data }: { data: PageData } = $props();
 </script>
 
-<GalleryView tisch={data.tisch} page={data.page} gallery={data.gallery} />
+<GalleryView tisch={null} page={data.page} gallery={data.gallery} />

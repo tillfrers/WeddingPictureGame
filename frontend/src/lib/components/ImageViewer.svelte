@@ -1,33 +1,43 @@
 <script lang="ts">
 	import { fade, scale } from 'svelte/transition';
-	import { displayUrl } from '$lib/api';
 	import Icon from './Icon.svelte';
 
 	let {
-		tisch,
-		ids,
+		urls,
 		index,
 		onClose,
 		onNavigate
 	}: {
-		tisch: string;
-		ids: string[];
+		urls: string[];
 		index: number;
 		onClose: () => void;
 		onNavigate: (newIndex: number) => void;
 	} = $props();
 
-	const currentId = $derived(ids[index]);
+	// Wischgesten am Bildschirmrand gehören dem Browser (Zurück-Geste auf
+	// Android/iOS). Ohne diese Zone blättert der Viewer beim Zurückwischen nur
+	// zum nächsten Bild, statt die Geste durchzulassen.
+	const EDGE_GUARD = 28;
+
+	const currentUrl = $derived(urls[index]);
 	const hasPrev = $derived(index > 0);
-	const hasNext = $derived(index < ids.length - 1);
+	const hasNext = $derived(index < urls.length - 1);
 
 	let touchStartX = 0;
+	let swipeTracked = false;
 
 	function handleTouchStart(e: TouchEvent) {
-		touchStartX = e.touches[0]?.clientX ?? 0;
+		const x = e.touches[0]?.clientX ?? 0;
+
+		swipeTracked =
+			e.touches.length === 1 && x > EDGE_GUARD && x < window.innerWidth - EDGE_GUARD;
+		touchStartX = x;
 	}
 
 	function handleTouchEnd(e: TouchEvent) {
+		if (!swipeTracked) return;
+		swipeTracked = false;
+
 		const endX = e.changedTouches[0]?.clientX ?? touchStartX;
 		const dx = endX - touchStartX;
 		if (Math.abs(dx) < 60) return;
@@ -53,12 +63,13 @@
 	transition:fade={{ duration: 200 }}
 	ontouchstart={handleTouchStart}
 	ontouchend={handleTouchEnd}
+	ontouchcancel={() => (swipeTracked = false)}
 >
 	<button class="close" onclick={onClose} aria-label="Schließen"><Icon name="close" size={20} /></button>
 
 	<div class="stage">
-		{#key currentId}
-			<img src={displayUrl(tisch, currentId)} alt="" transition:scale={{ start: 0.94, duration: 200 }} />
+		{#key currentUrl}
+			<img src={currentUrl} alt="" transition:scale={{ start: 0.94, duration: 200 }} />
 		{/key}
 	</div>
 
@@ -73,7 +84,7 @@
 		</button>
 	{/if}
 
-	<div class="counter">{index + 1} / {ids.length}</div>
+	<div class="counter">{index + 1} / {urls.length}</div>
 </div>
 
 <style>

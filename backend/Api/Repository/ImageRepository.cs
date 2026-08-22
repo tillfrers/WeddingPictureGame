@@ -29,25 +29,29 @@ public class ImageRepository(AppDbContext dbContext, TimeProvider provider) : II
         return dbContext.Images.SingleAsync(i => i.Id == id, cancellationToken);
     }
 
-    public async Task<(IReadOnlyList<GalleryDto>, int)> GetGalleryAsync(int table, int page, CancellationToken cancellationToken = default)
+    public Task<(IReadOnlyList<GalleryDto>, int)> GetGalleryAsync(int table, int page, CancellationToken cancellationToken = default) =>
+        PageAsync(dbContext.Images.AsNoTracking().Where(i => i.Tables == table), page, cancellationToken);
+
+    public Task<(IReadOnlyList<GalleryDto>, int)> GetGalleryAllAsync(int page, CancellationToken cancellationToken = default) =>
+        PageAsync(dbContext.Images.AsNoTracking(), page, cancellationToken);
+    
+    private static async Task<(IReadOnlyList<GalleryDto>, int)> PageAsync(IQueryable<Images> query, int page, CancellationToken cancellationToken)
     {
-        var query = dbContext.Images.AsNoTracking()
-            .Where(i =>  i.Tables == table)
-            .OrderBy(i => i.DateCreated);
+        var ordered = query.OrderBy(i => i.DateCreated).ThenBy(i => i.Id);
 
-        var total = await query.CountAsync(cancellationToken: cancellationToken);
+        var total = await ordered.CountAsync(cancellationToken);
 
-        var images = await query
+        var images = await ordered
             .Skip((page - 1) * Constants.Constants.PageSizeGallery)
             .Take(Constants.Constants.PageSizeGallery)
-            .ToListAsync(cancellationToken: cancellationToken);
+            .ToListAsync(cancellationToken);
 
-        return(
+        return (
         [
             .. images.Select(i => new GalleryDto
             {
                 Id = i.Id,
-                ThumbnailUrl = $"/api/Image/{Constants.Constants.TableNames[table]}/{i.Id}/thumbnail"
+                ThumbnailUrl = $"/api/Image/{Constants.Constants.TableNames[i.Tables]}/{i.Id}/thumbnail"
             })
         ], total);
     }

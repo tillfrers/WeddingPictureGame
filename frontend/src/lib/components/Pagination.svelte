@@ -30,7 +30,7 @@
 		align-items: center;
 		justify-content: center;
 		gap: 18px;
-		padding: 10px 16px calc(10px + var(--safe-bottom));
+		padding: 10px 16px;
 	}
 
 	button {
