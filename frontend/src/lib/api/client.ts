@@ -13,9 +13,9 @@ export interface IImageClient {
 
     getGallery(table: string, page: number | undefined): Promise<PagedResultOfGalleryDto>;
 
-    getDisplay(table: string, id: string): Promise<void>;
+    getDisplay(table: string, id: string): Promise<FileResponse>;
 
-    getThumbnail(table: string, id: string): Promise<void>;
+    getThumbnail(table: string, id: string): Promise<FileResponse>;
 }
 
 export class ImageClient implements IImageClient {
@@ -68,6 +68,13 @@ export class ImageClient implements IImageClient {
             let resultData400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
             result400 = ProblemDetails.fromJS(resultData400);
             return throwException("A server side error occurred.", status, _responseText, _headers, result400);
+            });
+        } else if (status === 413) {
+            return response.text().then((_responseText) => {
+            let result413: any = null;
+            let resultData413 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result413 = ProblemDetails.fromJS(resultData413);
+            return throwException("A server side error occurred.", status, _responseText, _headers, result413);
             });
         } else if (status !== 200 && status !== 204) {
             return response.text().then((_responseText) => {
@@ -125,7 +132,7 @@ export class ImageClient implements IImageClient {
         return Promise.resolve<PagedResultOfGalleryDto>(null as any);
     }
 
-    getDisplay(table: string, id: string): Promise<void> {
+    getDisplay(table: string, id: string): Promise<FileResponse> {
         let url_ = this.baseUrl + "/api/Image/{table}/{id}/display";
         if (table === undefined || table === null)
             throw new globalThis.Error("The parameter 'table' must be defined.");
@@ -138,6 +145,7 @@ export class ImageClient implements IImageClient {
         let options_: RequestInit = {
             method: "GET",
             headers: {
+                "Accept": "application/octet-stream"
             }
         };
 
@@ -146,12 +154,26 @@ export class ImageClient implements IImageClient {
         });
     }
 
-    protected processGetDisplay(response: Response): Promise<void> {
+    protected processGetDisplay(response: Response): Promise<FileResponse> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return;
+            let result400: any = null;
+            let resultData400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result400 = ProblemDetails.fromJS(resultData400);
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
             });
         } else if (status === 404) {
             return response.text().then((_responseText) => {
@@ -165,10 +187,10 @@ export class ImageClient implements IImageClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<void>(null as any);
+        return Promise.resolve<FileResponse>(null as any);
     }
 
-    getThumbnail(table: string, id: string): Promise<void> {
+    getThumbnail(table: string, id: string): Promise<FileResponse> {
         let url_ = this.baseUrl + "/api/Image/{table}/{id}/thumbnail";
         if (table === undefined || table === null)
             throw new globalThis.Error("The parameter 'table' must be defined.");
@@ -181,6 +203,7 @@ export class ImageClient implements IImageClient {
         let options_: RequestInit = {
             method: "GET",
             headers: {
+                "Accept": "application/octet-stream"
             }
         };
 
@@ -189,12 +212,26 @@ export class ImageClient implements IImageClient {
         });
     }
 
-    protected processGetThumbnail(response: Response): Promise<void> {
+    protected processGetThumbnail(response: Response): Promise<FileResponse> {
         const status = response.status;
         let _headers: any = {}; if (response.headers && response.headers.forEach) { response.headers.forEach((v: any, k: any) => _headers[k] = v); };
-        if (status === 200) {
+        if (status === 200 || status === 206) {
+            const contentDisposition = response.headers ? response.headers.get("content-disposition") : undefined;
+            let fileNameMatch = contentDisposition ? /filename\*=(?:(\\?['"])(.*?)\1|(?:[^\s]+'.*?')?([^;\n]*))/g.exec(contentDisposition) : undefined;
+            let fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[3] || fileNameMatch[2] : undefined;
+            if (fileName) {
+                fileName = decodeURIComponent(fileName);
+            } else {
+                fileNameMatch = contentDisposition ? /filename="?([^"]*?)"?(;|$)/g.exec(contentDisposition) : undefined;
+                fileName = fileNameMatch && fileNameMatch.length > 1 ? fileNameMatch[1] : undefined;
+            }
+            return response.blob().then(blob => { return { fileName: fileName, data: blob, status: status, headers: _headers }; });
+        } else if (status === 400) {
             return response.text().then((_responseText) => {
-            return;
+            let result400: any = null;
+            let resultData400 = _responseText === "" ? null : JSON.parse(_responseText, this.jsonParseReviver);
+            result400 = ProblemDetails.fromJS(resultData400);
+            return throwException("A server side error occurred.", status, _responseText, _headers, result400);
             });
         } else if (status === 404) {
             return response.text().then((_responseText) => {
@@ -208,7 +245,7 @@ export class ImageClient implements IImageClient {
             return throwException("An unexpected server error occurred.", status, _responseText, _headers);
             });
         }
-        return Promise.resolve<void>(null as any);
+        return Promise.resolve<FileResponse>(null as any);
     }
 }
 
@@ -419,6 +456,13 @@ export interface IGalleryDto {
 export interface FileParameter {
     data: any;
     fileName: string;
+}
+
+export interface FileResponse {
+    data: Blob;
+    status: number;
+    fileName?: string;
+    headers?: { [name: string]: any };
 }
 
 export class SwaggerException extends Error {

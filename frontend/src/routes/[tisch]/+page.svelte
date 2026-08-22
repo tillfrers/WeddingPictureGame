@@ -6,12 +6,14 @@
 	import UploadProgress, { type UploadItem } from '$lib/components/UploadProgress.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import Pagination from '$lib/components/Pagination.svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	const items = $derived(data.gallery.items ?? []);
 	const ids = $derived(items.map((i) => i.id ?? ''));
+	const tableNumber = $derived(data.gallery.tableNumber ?? data.tisch);
 
 	let sheetOpen = $state(false);
 	let uploadItems = $state<UploadItem[]>([]);
@@ -86,15 +88,12 @@
 </script>
 
 <svelte:head>
-	<title>Fotogalerie – Tisch {data.tisch}</title>
+	<title>Fotos von Tisch {tableNumber}</title>
 </svelte:head>
 
 <div class="page">
 	<header>
-		<h1>Tisch {data.tisch}</h1>
-		<button class="refresh" onclick={() => invalidate('app:gallery')} aria-label="Galerie aktualisieren">
-			⟳
-		</button>
+		<h1>Fotos von Tisch {tableNumber}</h1>
 	</header>
 
 	<main>
@@ -127,7 +126,7 @@
 	</main>
 
 	<button class="fab" onclick={() => (sheetOpen = true)} aria-label="Bilder hochladen">
-		<span>＋</span>
+		<Icon name="plus" size={28} />
 	</button>
 </div>
 
@@ -156,9 +155,6 @@
 		position: sticky;
 		top: 0;
 		z-index: 10;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
 		padding: calc(14px + var(--safe-top)) calc(20px + var(--safe-right)) 14px calc(20px + var(--safe-left));
 		background: var(--color-bg);
 		border-bottom: 1px solid var(--color-border);
@@ -168,20 +164,6 @@
 		margin: 0;
 		font-size: 1.2rem;
 		letter-spacing: 0.02em;
-	}
-
-	.refresh {
-		width: 38px;
-		height: 38px;
-		border-radius: 50%;
-		border: 1px solid var(--color-border);
-		background: var(--color-surface);
-		font-size: 1.1rem;
-		transition: transform 0.4s ease;
-	}
-
-	.refresh:active {
-		transform: rotate(180deg);
 	}
 
 	main {
@@ -255,8 +237,6 @@
 		background: var(--color-accent);
 		color: var(--color-accent-contrast);
 		box-shadow: var(--shadow-lift);
-		font-size: 1.8rem;
-		line-height: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;

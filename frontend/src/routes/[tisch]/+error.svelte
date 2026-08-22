@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { fade } from 'svelte/transition';
+	import Icon from '$lib/components/Icon.svelte';
 </script>
 
 <main in:fade={{ duration: 250 }}>
 	<div class="card">
-		<span class="emoji">🙈</span>
+		<span class="icon"><Icon name="alert" size={44} /></span>
 		<h1>Ups!</h1>
 		<p>{page.error?.message ?? 'Dieser Tisch konnte nicht gefunden werden.'}</p>
 		<p class="hint">Bitte überprüfe den QR-Code oder frage am Empfang nach.</p>
@@ -30,9 +31,10 @@
 		padding: 40px 28px;
 	}
 
-	.emoji {
-		font-size: 48px;
-		display: block;
+	.icon {
+		display: flex;
+		justify-content: center;
+		color: var(--color-text-muted);
 		margin-bottom: 12px;
 	}
 

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Icon from './Icon.svelte';
+
 	let {
 		page,
 		totalPages,
@@ -14,11 +16,11 @@
 
 <nav class="pagination" aria-label="Seiten">
 	<button disabled={page <= 1} onclick={() => onNavigate(page - 1)} aria-label="Vorherige Seite">
-		‹
+		<Icon name="chevron-left" size={20} />
 	</button>
 	<span>Seite {page} / {Math.max(totalPages, 1)}</span>
 	<button disabled={!hasNext} onclick={() => onNavigate(page + 1)} aria-label="Nächste Seite">
-		›
+		<Icon name="chevron-right" size={20} />
 	</button>
 </nav>
 
@@ -37,7 +39,10 @@
 		border-radius: 50%;
 		border: 1px solid var(--color-border);
 		background: var(--color-surface);
-		font-size: 1.2rem;
+		color: var(--color-text);
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		box-shadow: var(--shadow-soft);
 	}
 

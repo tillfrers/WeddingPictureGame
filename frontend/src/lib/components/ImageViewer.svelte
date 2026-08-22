@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { fade, scale } from 'svelte/transition';
 	import { displayUrl } from '$lib/api';
+	import Icon from './Icon.svelte';
 
 	let {
 		tisch,
@@ -53,7 +54,7 @@
 	ontouchstart={handleTouchStart}
 	ontouchend={handleTouchEnd}
 >
-	<button class="close" onclick={onClose} aria-label="Schließen">✕</button>
+	<button class="close" onclick={onClose} aria-label="Schließen"><Icon name="close" size={20} /></button>
 
 	<div class="stage">
 		{#key currentId}
@@ -62,10 +63,14 @@
 	</div>
 
 	{#if hasPrev}
-		<button class="nav prev" onclick={() => onNavigate(index - 1)} aria-label="Vorheriges Bild">‹</button>
+		<button class="nav prev" onclick={() => onNavigate(index - 1)} aria-label="Vorheriges Bild">
+			<Icon name="chevron-left" size={26} />
+		</button>
 	{/if}
 	{#if hasNext}
-		<button class="nav next" onclick={() => onNavigate(index + 1)} aria-label="Nächstes Bild">›</button>
+		<button class="nav next" onclick={() => onNavigate(index + 1)} aria-label="Nächstes Bild">
+			<Icon name="chevron-right" size={26} />
+		</button>
 	{/if}
 
 	<div class="counter">{index + 1} / {ids.length}</div>
@@ -109,7 +114,9 @@
 		border: none;
 		background: rgba(255, 255, 255, 0.15);
 		color: #fff;
-		font-size: 1.1rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.nav {
@@ -122,8 +129,9 @@
 		border: none;
 		background: rgba(255, 255, 255, 0.15);
 		color: #fff;
-		font-size: 1.6rem;
-		line-height: 1;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	.nav.prev {
