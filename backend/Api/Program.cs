@@ -34,7 +34,8 @@ using (var scope = app.Services.CreateScope())
     fileProcessor.EnsurePathExists();
 }
 
-app.UseHttpsRedirection();
+// Kein UseHttpsRedirection: TLS wird vom vorgelagerten Reverse Proxy
+// terminiert, Kestrel spricht ausschliesslich HTTP auf dem Loopback.
 app.MapControllers();
 
 app.UseExceptionHandler(); 

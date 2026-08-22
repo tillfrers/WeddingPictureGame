@@ -1,8 +1,12 @@
+using Api.Options;
+using Microsoft.Extensions.Options;
+
 namespace Api.Processor;
 
-public class FileProcessor : IFileProcessor
+public class FileProcessor(IOptions<ImagePathOptions> options) : IFileProcessor
 {
-    private string ImageRootPath => Path.Combine(Environment.CurrentDirectory,"images");
+    private string ImageRootPath => 
+        options.Value.ImagePath ?? Path.Combine(Environment.CurrentDirectory,"images");
     
     private string GetTableDirectory(int i) => Path.Combine(ImageRootPath, i.ToString());
     private string GetOriginalDirectory(int i) => Path.Combine(GetTableDirectory(i), "original");

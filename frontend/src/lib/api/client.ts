@@ -354,6 +354,7 @@ export class PagedResultOfGalleryDto implements IPagedResultOfGalleryDto {
     page?: number;
     pageSize?: number;
     totalCount?: number;
+    tableNumber?: number;
     totalPages?: number;
     hasNext?: boolean;
 
@@ -376,6 +377,7 @@ export class PagedResultOfGalleryDto implements IPagedResultOfGalleryDto {
             this.page = _data["page"];
             this.pageSize = _data["pageSize"];
             this.totalCount = _data["totalCount"];
+            this.tableNumber = _data["tableNumber"];
             this.totalPages = _data["totalPages"];
             this.hasNext = _data["hasNext"];
         }
@@ -398,6 +400,7 @@ export class PagedResultOfGalleryDto implements IPagedResultOfGalleryDto {
         data["page"] = this.page;
         data["pageSize"] = this.pageSize;
         data["totalCount"] = this.totalCount;
+        data["tableNumber"] = this.tableNumber;
         data["totalPages"] = this.totalPages;
         data["hasNext"] = this.hasNext;
         return data;
@@ -409,6 +412,7 @@ export interface IPagedResultOfGalleryDto {
     page?: number;
     pageSize?: number;
     totalCount?: number;
+    tableNumber?: number;
     totalPages?: number;
     hasNext?: boolean;
 }

@@ -57,7 +57,7 @@ public sealed class ImageController(IImageProcessor imageProcessor, IImageReposi
 
         var result = await imageRepository.GetGalleryAsync(id, page, cancellationToken);
 
-        return Ok(new PagedResult<GalleryDto>(result.Item1, page, Constants.Constants.PageSizeGallery, result.Item2));
+        return Ok(new PagedResult<GalleryDto>(result.Item1, page, Constants.Constants.PageSizeGallery, result.Item2, id));
     }
 
     [HttpGet("{table}/{id}/display")]

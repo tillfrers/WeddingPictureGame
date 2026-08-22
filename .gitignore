@@ -4,3 +4,4 @@ appsettings.Production.json
 appsettings.production.json
 /.idea
 images/
+deploy/

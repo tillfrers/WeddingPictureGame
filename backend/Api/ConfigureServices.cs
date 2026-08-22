@@ -1,4 +1,5 @@
-﻿using Api.Persistence;
+﻿using Api.Options;
+using Api.Persistence;
 using Api.Processor;
 using Api.Repository;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,8 @@ public static class ConfigureServices
         services.AddScoped<IImageProcessor, ImageProcessor>();
         services.AddScoped<IImageRepository, ImageRepository>();
         services.AddScoped<IFileProcessor, FileProcessor>();
+        
+        services.Configure<ImagePathOptions>(configuration);
         
         services.AddSingleton(TimeProvider.System);
 
