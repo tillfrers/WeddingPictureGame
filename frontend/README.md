@@ -54,11 +54,11 @@ Backends aus `backend/Api/nswag.json` neu erzeugt — nicht manuell bearbeiten.
 ## Bilder aufs Handy sichern
 
 Die Gesamtgalerie (`/gallery`) kann Bilder markieren und die Originale sichern.
-Dafür gibt es zwei Wege, `kannTeilen()` in `src/lib/download.ts` entscheidet:
+Dafür gibt es drei Wege, `sicherWeg()` in `src/lib/download.ts` entscheidet.
 
-**Teilen-Menü** (Touch-Gerät mit `navigator.canShare({files})`, also iOS ab 14,
-Chrome Android ab 76, Samsung Internet ab 11). Die Bilder gehen als Dateien an
-das Teilen-Menü des Betriebssystems, und "Bilder sichern" legt sie direkt in der
+**`teilen`** — Touch-Gerät mit `navigator.canShare({files})`, also iOS ab 14,
+Chrome Android ab 76, Samsung Internet ab 11. Die Bilder gehen als Dateien ans
+Teilen-Menü des Betriebssystems, und "Bilder sichern" legt sie direkt in der
 Foto-Galerie ab. Nötig ist dieser Weg vor allem wegen iOS: dort bricht eine
 Folge programmgesteuerter Downloads nach dem ersten Bild ab, und Downloads
 landen ohnehin in "Dateien" statt in "Fotos".
@@ -70,13 +70,28 @@ als Übertrag in den nächsten übernommen. Jeder Stapel braucht einen eigenen
 Tipp: `navigator.share()` verlangt eine frische Nutzeraktion, nach einem `await`
 ist sie verbraucht.
 
-**Download** (Rechner und alles ohne Datei-Teilen). Jedes Bild wird einzeln über
-einen `<a download>` mit Blob-URL abgelegt. Weil eine offene Objekt-URL das
-ganze Bild im Speicher hält und ein Original mehrere MB wiegt, sind nie mehr als
+**`einzeln`** — Touch-Gerät ohne Datei-Teilen, praktisch also Firefox für
+Android und In-App-Browser. Dort zeigt der Browser einen modalen
+Speichern-Dialog und verträgt immer nur einen: Klicks, die währenddessen kommen,
+bleiben in der Warteschlange hängen und tauchen erst wieder auf, wenn die App
+aus dem Hintergrund zurückkehrt — es wird also nur ein Bild gespeichert, obwohl
+die Anzeige alle als erledigt meldet. Deshalb wird hier pro Tipp genau ein Bild
+gespeichert, und immer nur eins im Voraus geladen.
+
+**`auto`** — Rechner. Alle Bilder laufen nacheinander über `<a download>` mit
+Blob-URL durch, ohne Zutun. Weil eine offene Objekt-URL das ganze Bild im
+Speicher hält und ein Original mehrere MB wiegt, sind nie mehr als
 `OFFENE_URLS_MAX` gleichzeitig offen.
 
-**Firefox** unterstützt das Teilen von Dateien nicht (weder Desktop noch
-Android) und fällt deshalb immer auf den Download zurück. Fragt Firefox dabei
-jedes Mal nach dem Speicherort, ist das die Einstellung
+Fragt Firefox bei jedem Bild nach dem Speicherort, ist das die Einstellung
 *Einstellungen → Downloads → Immer nachfragen* — eine Webseite kann sie nicht
 übergehen.
+
+## Nur ein Auth-Cookie
+
+Das Backend führt einen einzigen Cookie (`wpg_auth`), jedes `redeem`
+überschreibt ihn. Wer den Einladungslink offen hat und danach den QR-Code am
+Tisch scannt, verlöre damit den Zugang zur Gesamtgalerie. Deshalb fragt
+`+layout.ts` vor dem Einlösen eines Tisch-Tokens nach, ob der weitergehende
+Zugang schon steht, und überspringt es dann — er deckt die Tisch-Endpunkte
+ohnehin mit ab.

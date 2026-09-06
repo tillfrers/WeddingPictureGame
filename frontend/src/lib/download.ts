@@ -1,39 +1,45 @@
 /**
- * Zwei Wege, ein Bild aufs Gerät zu bekommen.
+ * Drei Wege, ein Bild aufs Gerät zu bekommen - `sicherWeg()` entscheidet.
  *
  * Auf dem Handy ist das Teilen-Menü der einzige Weg, der die Fotos wirklich in
  * der Galerie ablegt: iOS legt Downloads in "Dateien" statt in "Fotos", und
- * Android fragt je nach Browser vorher nach dem Speicherort. Über
- * `navigator.share` reicht dagegen ein Tipp auf "Bilder sichern".
+ * eine Folge programmgesteuerter Downloads bricht dort ohnehin nach dem ersten
+ * Bild ab. Über `navigator.share` reicht dagegen ein Tipp auf "Bilder sichern".
  *
- * Am Rechner ist es umgekehrt - dort ist der Download in den Ordner das
- * Erwartete und ein Teilen-Dialog die Überraschung. Deshalb entscheidet
- * `kannTeilen()`, welcher Weg genommen wird.
+ * Firefox unterstützt das Teilen von Dateien nicht (weder Desktop noch
+ * Android) und muss deshalb herunterladen. Auf dem Handy zeigt es dabei einen
+ * modalen Speichern-Dialog und verträgt immer nur einen davon: Klicks, die
+ * währenddessen kommen, bleiben in der Warteschlange hängen und tauchen erst
+ * wieder auf, wenn die App aus dem Hintergrund zurückkehrt. Deshalb wird dort
+ * pro Tipp genau ein Bild gespeichert.
+ *
+ * Am Rechner ist beides kein Thema - dort laufen die Downloads einfach durch.
  */
+export type SicherWeg =
+	/** Stapelweise ans Teilen-Menü des Geräts. */
+	| 'teilen'
+	/** Ein Bild pro Tipp herunterladen (mobile Browser ohne Datei-Teilen). */
+	| 'einzeln'
+	/** Alle Bilder nacheinander herunterladen, ohne Zutun. */
+	| 'auto';
 
 /**
- * Chromium nimmt höchstens 10 Dateien und 50 MB pro Aufruf entgegen; iOS kann
- * mehr, aber ein gemeinsamer Stapel spart eine Sonderbehandlung. Darum wird in
- * Häppchen geteilt - knapp unter dem Limit, damit Metadaten nicht drüberkippen.
+ * Chromium nimmt höchstens 10 Dateien und 50 MB pro Teilen-Aufruf entgegen;
+ * iOS kann mehr, aber ein gemeinsamer Stapel spart eine Sonderbehandlung.
+ * Knapp unter dem Limit, damit Metadaten nicht drüberkippen.
  */
 export const STAPEL_MAX_DATEIEN = 10;
 export const STAPEL_MAX_BYTES = 45 * 1024 * 1024;
 
 /**
- * Ob die Bilder über das Teilen-Menü des Geräts gesichert werden können.
- *
  * Firefox kennt `canShare`, unterstützt aber keine Dateien - das merkt man erst,
  * wenn man mit einer echten Datei nachfragt. Deshalb die Probe statt einer
  * reinen Existenzprüfung.
  */
-export function kannTeilen(): boolean {
+function kannDateienTeilen(): boolean {
 	if (typeof navigator === 'undefined') return false;
 	if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function')
 		return false;
-
-	// Nur auf Touch-Geräten: am Rechner will man die Bilder im Download-Ordner,
-	// nicht im Teilen-Dialog des Betriebssystems.
-	if (!window.matchMedia?.('(pointer: coarse)').matches) return false;
 
 	try {
 		const probe = new File(['x'], 'probe.jpg', { type: 'image/jpeg' });
@@ -41,6 +47,15 @@ export function kannTeilen(): boolean {
 	} catch {
 		return false;
 	}
+}
+
+export function sicherWeg(): SicherWeg {
+	// Kein Touch-Gerät: am Rechner will man die Bilder im Download-Ordner, nicht
+	// im Teilen-Dialog des Betriebssystems - und dort laufen Downloads in Folge.
+	if (typeof window === 'undefined' || !window.matchMedia?.('(pointer: coarse)').matches)
+		return 'auto';
+
+	return kannDateienTeilen() ? 'teilen' : 'einzeln';
 }
 
 /**
@@ -89,8 +104,10 @@ function merkeUrl(url: string): void {
 }
 
 /**
- * Legt ein Bild im Download-Ordner des Geräts ab - der Weg für alles, was kein
- * Teilen-Menü anbietet (Rechner, Firefox).
+ * Legt ein Bild im Download-Ordner des Geräts ab.
+ *
+ * Bewusst synchron: der Klick muss im selben Zug wie der Tipp des Gastes
+ * passieren, sonst wertet der Browser ihn als nicht angefordert und blockt.
  */
 export function saveBlob(blob: Blob, fileName: string): void {
 	const url = URL.createObjectURL(blob);

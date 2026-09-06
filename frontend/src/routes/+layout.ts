@@ -11,6 +11,22 @@ export const ssr = false;
 const GESAMTGALERIE = '/gallery';
 
 /**
+ * Steht der weitergehende Zugang schon? Das Backend führt nur einen einzigen
+ * Auth-Cookie, und der ist HttpOnly - auslesen geht also nicht, nachfragen
+ * schon.
+ */
+async function hatGesamtzugang(): Promise<boolean> {
+	try {
+		await imageClient.getGalleryAll(1);
+		return true;
+	} catch {
+		// 401 (gar kein Zugang) wie 403 (nur Tisch-Zugang) landen hier, ebenso
+		// ein Netzwerkfehler. In allen drei Fällen ist Einlösen richtig.
+		return false;
+	}
+}
+
+/**
  * Alle Backend-Endpunkte (ausser /redeem) verlangen den Auth-Cookie. Den gibt
  * es nur gegen ein Capability-Token, und davon gibt es zwei:
  *
@@ -22,6 +38,12 @@ const GESAMTGALERIE = '/gallery';
  * `allTables` am Pfad. Das Backend prüft je nach Flag gegen einen anderen Hash
  * und hinterlegt das Ergebnis als Scope im Cookie; ein Tisch-Token kommt damit
  * nicht an die Gesamtgalerie.
+ *
+ * Weil es aber nur EINEN Cookie gibt, überschreibt jedes Einlösen das vorige.
+ * Wer den Einladungslink schon offen hatte und danach den QR-Code am Tisch
+ * scannt, verlöre sonst die Gesamtgalerie - deshalb wird das Tisch-Token
+ * übersprungen, wenn der weitergehende Zugang bereits steht. Er deckt die
+ * Tisch-Endpunkte ohnehin mit ab.
  *
  * Das Token wird hier einmal eingeloest und danach per Redirect aus der URL
  * entfernt, damit es nicht in History, Lesezeichen oder geteilten Links landet.
@@ -37,12 +59,14 @@ export const load: LayoutLoad = async ({ url }) => {
 	// Ein von Hand angehängter Schrägstrich soll den Link nicht kaputt machen.
 	const allTables = url.pathname.replace(/\/+$/, '') === GESAMTGALERIE;
 
-	try {
-		await imageClient.redeem(new RedeemDto({ token, allTables }));
-	} catch {
-		// Ungültiges Token: nicht hier abbrechen, sondern den Redirect trotzdem
-		// ausführen. Die Seite läuft dann in ihren 401 und zeigt den passenden
-		// Hinweis - so bleibt die Fehlermeldung an einer Stelle.
+	if (allTables || !(await hatGesamtzugang())) {
+		try {
+			await imageClient.redeem(new RedeemDto({ token, allTables }));
+		} catch {
+			// Ungültiges Token: nicht hier abbrechen, sondern den Redirect trotzdem
+			// ausführen. Die Seite läuft dann in ihren 401 und zeigt den passenden
+			// Hinweis - so bleibt die Fehlermeldung an einer Stelle.
+		}
 	}
 
 	const target = new URL(url);

@@ -5,11 +5,12 @@
 	import { fade } from 'svelte/transition';
 	import { imageClient, apiErrorMessage, displayUrl } from '$lib/api';
 	import {
-		kannTeilen,
 		saveBlob,
+		sicherWeg,
 		teileDateien,
 		STAPEL_MAX_BYTES,
-		STAPEL_MAX_DATEIEN
+		STAPEL_MAX_DATEIEN,
+		type SicherWeg
 	} from '$lib/download';
 	import type { PagedResultOfGalleryDto } from '$lib/api/client';
 	import UploadSheet from '$lib/components/UploadSheet.svelte';
@@ -330,8 +331,8 @@
 	let downloadPhase = $state<'laden' | 'sichern' | 'fertig'>('laden');
 	let shareBusy = $state(false);
 
-	// Geht dieser Lauf über das Teilen-Menü oder über den Download-Ordner?
-	let dlTeilen = $state(false);
+	// Teilen-Menü, ein Bild pro Tipp oder alles am Stück? Siehe $lib/download.
+	let dlWeg = $state<SicherWeg>('auto');
 	let dlStapel = $state<File[]>([]);
 
 	// Reiner Ablaufzustand, den die Anzeige nicht braucht.
@@ -347,10 +348,12 @@
 		downloadPhase === 'fertig'
 			? 'Fertig'
 			: downloadPhase === 'sichern'
-				? 'Bereit zum Sichern'
-				: dlTeilen
-					? 'Bilder werden geladen…'
-					: 'Bilder werden gespeichert…'
+				? dlWeg === 'teilen'
+					? 'Bereit zum Sichern'
+					: 'Bereit zum Speichern'
+				: dlWeg === 'auto'
+					? 'Bilder werden gespeichert…'
+					: 'Bilder werden geladen…'
 	);
 
 	// Pause zwischen zwei Downloads: Browser drosseln Downloads, die zu dicht
@@ -376,7 +379,7 @@
 		dlStapel = [];
 		dlStapelIndizes = [];
 		dlUebertrag = null;
-		dlTeilen = kannTeilen();
+		dlWeg = sicherWeg();
 
 		downloadItems = ids.map((_, i) => ({ name: `Bild ${i + 1}`, status: 'pending' as const }));
 		downloadPhase = 'laden';
@@ -405,7 +408,11 @@
 				dlUebertrag = null;
 			}
 
-			while (dlCursor < dlIds.length && (!dlTeilen || dlStapel.length < STAPEL_MAX_DATEIEN)) {
+			// Ein Bild pro Tipp: dann wird auch nur eins im Voraus geholt - was der
+			// Gast nie speichert, soll gar nicht erst über die Leitung gehen.
+			const stapelGrenze = dlWeg === 'einzeln' ? 1 : STAPEL_MAX_DATEIEN;
+
+			while (dlCursor < dlIds.length && (dlWeg === 'auto' || dlStapel.length < stapelGrenze)) {
 				const i = dlCursor++;
 				const id = dlIds[i];
 
@@ -415,7 +422,7 @@
 					const datei = await imageClient.getOriginal(id);
 					const name = datei.fileName || `${id}.jpg`;
 
-					if (dlTeilen) {
+					if (dlWeg !== 'auto') {
 						const file = new File([datei.data], name, {
 							type: datei.data.type || 'image/jpeg'
 						});
@@ -488,6 +495,28 @@
 		dlStapel = [];
 		dlStapelIndizes = [];
 		await ladeWeiter();
+	}
+
+	/**
+	 * Speichert genau ein Bild - der Weg für mobile Browser ohne Datei-Teilen.
+	 *
+	 * Bewusst ohne `await` vor dem Speichern: der Klick muss im selben Zug wie
+	 * der Tipp passieren. Und bewusst nur eins: Firefox auf Android zeigt einen
+	 * modalen Speichern-Dialog und schluckt alles, was währenddessen kommt.
+	 */
+	function naechstesEinzeln() {
+		if (downloadPhase !== 'sichern' || dlStapel.length === 0) return;
+
+		const index = dlStapelIndizes[0];
+
+		saveBlob(dlStapel[0], dlStapel[0].name);
+		downloadItems[index] = { ...downloadItems[index], status: 'done' };
+
+		dlStapel = dlStapel.slice(1);
+		dlStapelIndizes = dlStapelIndizes.slice(1);
+
+		// Stapelgröße ist hier 1, also steht jetzt das nächste Bild an.
+		if (dlStapel.length === 0) void ladeWeiter();
 	}
 
 	function closeDownloadProgress() {
@@ -689,12 +718,22 @@
 		showClose={downloadPhase !== 'laden'}
 		closeLabel={downloadPhase === 'fertig' ? 'Schließen' : 'Abbrechen'}
 		onClose={closeDownloadProgress}
-		actionLabel={downloadPhase === 'sichern' ? `Bilder sichern (${dlStapel.length})` : undefined}
-		actionHint={downloadPhase === 'sichern'
-			? 'Im folgenden Menü „Bilder sichern“ wählen – dann landen die Fotos direkt in deiner Galerie.'
-			: undefined}
+		actionLabel={downloadPhase !== 'sichern'
+			? undefined
+			: dlWeg === 'teilen'
+				? `Bilder sichern (${dlStapel.length})`
+				: 'Nächstes Bild speichern'}
+		actionHint={downloadPhase !== 'sichern'
+			? undefined
+			: dlWeg === 'teilen'
+				? 'Im folgenden Menü „Bilder sichern“ wählen – dann landen die Fotos direkt in deiner Galerie.'
+				: 'Dein Browser kann immer nur ein Bild auf einmal speichern. Tippe nach jedem Speichern hier erneut.'}
 		actionBusy={shareBusy}
-		onAction={downloadPhase === 'sichern' ? stapelSichern : undefined}
+		onAction={downloadPhase !== 'sichern'
+			? undefined
+			: dlWeg === 'teilen'
+				? stapelSichern
+				: naechstesEinzeln}
 	/>
 {/if}
 
