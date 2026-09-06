@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { goto, invalidate, pushState, replaceState } from '$app/navigation';
 	import { page as pageState } from '$app/state';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { fade } from 'svelte/transition';
 	import { imageClient, apiErrorMessage, displayUrl } from '$lib/api';
+	import { saveBlob } from '$lib/download';
 	import type { PagedResultOfGalleryDto } from '$lib/api/client';
 	import UploadSheet from '$lib/components/UploadSheet.svelte';
-	import UploadProgress, { type UploadItem } from '$lib/components/UploadProgress.svelte';
+	import TransferProgress, { type TransferItem } from '$lib/components/TransferProgress.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import Icon from '$lib/components/Icon.svelte';
@@ -31,6 +33,10 @@
 	// Hochladen geht nur in eine Tisch-Galerie - über alle Tische fehlt das Ziel.
 	const canUpload = $derived(tisch !== null);
 
+	// Umgekehrt gibt es das Herunterladen der Originale nur in der Gesamtansicht:
+	// dort hängt der Gast am Einladungs-Token, das genau dafür gedacht ist.
+	const canSelect = $derived(tisch === null && (gallery.totalCount ?? 0) > 0);
+
 	// Der Viewer hängt an der History (Shallow Routing), damit die Zurück-Geste
 	// des Handys ihn schließt statt die Galerie-Seite zu verlassen.
 	const viewerIndex = $derived(
@@ -40,7 +46,7 @@
 	);
 
 	let sheetOpen = $state(false);
-	let uploadItems = $state<UploadItem[]>([]);
+	let uploadItems = $state<TransferItem[]>([]);
 	let uploadActive = $state(false);
 	let toast = $state('');
 	let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -157,7 +163,7 @@
 
 		await Promise.all(
 			files.map(async (file, i) => {
-				uploadItems[i] = { ...uploadItems[i], status: 'uploading' };
+				uploadItems[i] = { ...uploadItems[i], status: 'running' };
 				try {
 					await imageClient.upload(table, { data: file, fileName: file.name });
 					uploadItems[i] = { ...uploadItems[i], status: 'done' };
@@ -187,6 +193,179 @@
 		}
 	}
 
+	// ---------------------------------------------------------------- Auswahl
+
+	// Die Markierung hängt an den Bild-Ids, nicht an Positionen: nur so übersteht
+	// sie das Blättern, bei dem die Seite komplett neu geladen wird. Die
+	// Komponente selbst bleibt dabei am Leben (gleiche Route), die Auswahl also
+	// auch.
+	let selectMode = $state(false);
+	const selectedIds = new SvelteSet<string>();
+	const selectedCount = $derived(selectedIds.size);
+
+	let markingAll = $state(false);
+
+	const LANGDRUCK_MS = 450; // ab hier gilt ein Tipp als "gedrückt halten"
+	const LANGDRUCK_TOLERANZ = 10; // px Wackeln, darüber war es doch Scrollen
+
+	let pressTimer: ReturnType<typeof setTimeout> | undefined;
+	let pressX = 0;
+	let pressY = 0;
+	let longPressFired = false;
+
+	function toggleSelection(id: string) {
+		if (selectedIds.has(id)) selectedIds.delete(id);
+		else selectedIds.add(id);
+	}
+
+	function exitSelectMode() {
+		selectMode = false;
+		selectedIds.clear();
+	}
+
+	function cancelPress() {
+		clearTimeout(pressTimer);
+		pressTimer = undefined;
+	}
+
+	// Gedrückt halten startet den Auswahlmodus - dieselbe Geste wie in der
+	// Galerie-App des Handys. Im Auswahlmodus selbst genügt ein Tipp.
+	function startPress(e: PointerEvent, id: string) {
+		if (!canSelect || selectMode || (e.pointerType === 'mouse' && e.button !== 0)) return;
+
+		longPressFired = false;
+		pressX = e.clientX;
+		pressY = e.clientY;
+
+		cancelPress();
+		pressTimer = setTimeout(() => {
+			pressTimer = undefined;
+			longPressFired = true;
+			selectMode = true;
+			selectedIds.add(id);
+			navigator.vibrate?.(25);
+		}, LANGDRUCK_MS);
+	}
+
+	function movePress(e: PointerEvent) {
+		if (pressTimer === undefined) return;
+
+		if (
+			Math.abs(e.clientX - pressX) > LANGDRUCK_TOLERANZ ||
+			Math.abs(e.clientY - pressY) > LANGDRUCK_TOLERANZ
+		)
+			cancelPress();
+	}
+
+	function handleThumb(index: number, id: string) {
+		cancelPress();
+
+		// Nach einem Langdruck kommt trotzdem noch ein Klick - der würde die
+		// gerade gesetzte Markierung sofort wieder aufheben.
+		if (longPressFired) {
+			longPressFired = false;
+			return;
+		}
+
+		if (selectMode) toggleSelection(id);
+		else openViewer(index);
+	}
+
+	/** Wie viele Seiten gleichzeitig geholt werden, wenn alles markiert wird. */
+	const GLEICHZEITIGE_SEITEN = 4;
+
+	/**
+	 * Markiert alle Bilder - auch die auf den anderen Seiten. Das Backend liefert
+	 * die Galerie nur seitenweise und kennt keinen Endpunkt für "alle Ids", also
+	 * werden die übrigen Seiten hier nachgeholt. In kleinen Wellen, damit bei
+	 * vielen Seiten nicht dutzende Anfragen gleichzeitig laufen.
+	 */
+	async function markAll() {
+		if (markingAll) return;
+
+		markingAll = true;
+
+		const ids = new Set<string>();
+		const sammle = (seite: PagedResultOfGalleryDto) => {
+			for (const item of seite.items ?? []) if (item.id) ids.add(item.id);
+		};
+
+		sammle(gallery);
+
+		try {
+			const offen: number[] = [];
+			for (let p = 1; p <= Math.max(gallery.totalPages ?? 1, 1); p++) if (p !== page) offen.push(p);
+
+			for (let i = 0; i < offen.length; i += GLEICHZEITIGE_SEITEN) {
+				const welle = await Promise.all(
+					offen.slice(i, i + GLEICHZEITIGE_SEITEN).map((p) => imageClient.getGalleryAll(p))
+				);
+
+				welle.forEach(sammle);
+			}
+		} catch (err) {
+			// Was schon eingesammelt ist, wird trotzdem markiert - lieber ein Teil
+			// der Auswahl als gar keine.
+			showToast(apiErrorMessage(err));
+		} finally {
+			for (const id of ids) selectedIds.add(id);
+			markingAll = false;
+		}
+	}
+
+	// --------------------------------------------------------------- Download
+
+	let downloadItems = $state<TransferItem[]>([]);
+	let downloadActive = $state(false);
+
+	const downloadFinished = $derived(
+		downloadItems.length > 0 &&
+			downloadItems.every((i) => i.status === 'done' || i.status === 'error')
+	);
+
+	// Pause zwischen zwei Dateien: mobile Browser drosseln Downloads, die zu
+	// dicht aufeinander folgen, und verschlucken dann einzelne Bilder.
+	const DOWNLOAD_PAUSE_MS = 150;
+
+	/**
+	 * Holt die Originale der markierten Bilder und legt sie einzeln auf dem Gerät
+	 * ab. Bewusst nacheinander: mehrere gleichzeitig ausgelöste Downloads
+	 * blockieren sich auf dem Handy gegenseitig, und der Fortschritt bliebe
+	 * unehrlich.
+	 */
+	async function downloadSelected() {
+		const ids = [...selectedIds];
+		if (ids.length === 0 || downloadActive) return;
+
+		downloadItems = ids.map((_, i) => ({ name: `Bild ${i + 1}`, status: 'pending' as const }));
+		downloadActive = true;
+
+		for (let i = 0; i < ids.length; i++) {
+			downloadItems[i] = { ...downloadItems[i], status: 'running' };
+
+			try {
+				const datei = await imageClient.getOriginal(ids[i]);
+				saveBlob(datei.data, datei.fileName || `${ids[i]}.jpg`);
+				downloadItems[i] = { ...downloadItems[i], status: 'done' };
+			} catch (err) {
+				downloadItems[i] = { ...downloadItems[i], status: 'error', error: apiErrorMessage(err) };
+			}
+
+			if (i < ids.length - 1) await new Promise((r) => setTimeout(r, DOWNLOAD_PAUSE_MS));
+		}
+	}
+
+	function closeDownloadProgress() {
+		const gescheitert = downloadItems.some((i) => i.status === 'error');
+
+		downloadActive = false;
+		downloadItems = [];
+
+		// Nach einem sauberen Durchlauf ist die Auswahl erledigt. Gab es Fehler,
+		// bleibt sie stehen, damit der Gast es direkt noch einmal versuchen kann.
+		if (!gescheitert) exitSelectMode();
+	}
+
 	function goToPage(target: number) {
 		goto(`?page=${target}`);
 	}
@@ -206,7 +385,16 @@
 	function closeViewer() {
 		history.back();
 	}
+
+	// Escape verlässt den Auswahlmodus - aber nur, wenn nicht gerade der Viewer
+	// offen ist, der die Taste für sich selbst braucht.
+	function handleKey(e: KeyboardEvent) {
+		if (e.key === 'Escape' && selectMode && viewerIndex === null && !downloadActive)
+			exitSelectMode();
+	}
 </script>
+
+<svelte:window onkeydown={handleKey} />
 
 <svelte:head>
 	<title>{title}</title>
@@ -214,7 +402,46 @@
 
 <div class="page">
 	<header>
-		<h1>{title}</h1>
+		<div class="kopfzeile">
+			<div class="titel">
+				{#if selectMode}
+					<button class="ikone" onclick={exitSelectMode} aria-label="Auswahl beenden">
+						<Icon name="close" size={18} />
+					</button>
+				{/if}
+				<h1>
+					{#if selectMode}
+						{selectedCount === 0 ? 'Bilder auswählen' : `${selectedCount} ausgewählt`}
+					{:else}
+						{title}
+					{/if}
+				</h1>
+			</div>
+
+			{#if canSelect}
+				<div class="aktionen">
+					{#if selectMode}
+						<button class="aktion" onclick={markAll} disabled={markingAll}>
+							{#if markingAll}
+								<span class="spinner"></span>
+							{:else}
+								<Icon name="check-circle" size={16} />
+							{/if}
+							Alle markieren
+						</button>
+						<button class="aktion primaer" onclick={downloadSelected} disabled={selectedCount === 0}>
+							<Icon name="download" size={16} />
+							Herunterladen
+						</button>
+					{:else}
+						<button class="aktion" onclick={() => (selectMode = true)}>
+							<Icon name="check-circle" size={16} />
+							Auswählen
+						</button>
+					{/if}
+				</div>
+			{/if}
+		</div>
 	</header>
 
 	<div class="scrollbereich">
@@ -247,8 +474,36 @@
 			{:else}
 				<div class="grid" in:fade={{ duration: 200 }}>
 					{#each items as item, i (item.id)}
-						<button class="thumb" onclick={() => openViewer(i)} aria-label="Bild vergrößern">
-							<img src={item.thumbnailUrl} alt="" loading="lazy" />
+						{@const id = item.id ?? ''}
+						{@const markiert = selectedIds.has(id)}
+						<button
+							class="thumb"
+							class:auswahl={selectMode}
+							class:markiert
+							onclick={() => handleThumb(i, id)}
+							onpointerdown={(e) => startPress(e, id)}
+							onpointermove={movePress}
+							onpointerup={cancelPress}
+							onpointercancel={cancelPress}
+							onpointerleave={cancelPress}
+							oncontextmenu={(e) => {
+								// Ohne das legt das Handy beim Gedrückthalten sein eigenes
+								// Bild-Menü über die Auswahl.
+								if (canSelect) e.preventDefault();
+							}}
+							aria-pressed={selectMode ? markiert : undefined}
+							aria-label={selectMode
+								? markiert
+									? 'Auswahl aufheben'
+									: 'Bild auswählen'
+								: 'Bild vergrößern'}
+						>
+							<img src={item.thumbnailUrl} alt="" loading="lazy" draggable="false" />
+							{#if selectMode}
+								<span class="haken" class:an={markiert}>
+									{#if markiert}<Icon name="check" size={13} />{/if}
+								</span>
+							{/if}
 						</button>
 					{/each}
 				</div>
@@ -275,7 +530,23 @@
 {/if}
 
 {#if uploadActive}
-	<UploadProgress items={uploadItems} finished={uploadFinished} onClose={closeUploadProgress} />
+	<TransferProgress
+		items={uploadItems}
+		finished={uploadFinished}
+		busyTitle="Bilder werden hochgeladen…"
+		verb="hochgeladen"
+		onClose={closeUploadProgress}
+	/>
+{/if}
+
+{#if downloadActive}
+	<TransferProgress
+		items={downloadItems}
+		finished={downloadFinished}
+		busyTitle="Bilder werden gespeichert…"
+		verb="gespeichert"
+		onClose={closeDownloadProgress}
+	/>
 {/if}
 
 {#if viewerIndex !== null}
@@ -302,10 +573,78 @@
 		border-bottom: 1px solid var(--color-border);
 	}
 
+	/* Umbrechend: im Auswahlmodus stehen rechts zwei Tasten, die zusammen mit dem
+	   Titel auf schmalen Displays nicht in eine Zeile passen. Sie rutschen dann
+	   als Gruppe in die zweite Zeile und bleiben dort rechtsbündig. */
+	.kopfzeile {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+
+	.titel {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+	}
+
 	h1 {
 		margin: 0;
 		font-size: 1.2rem;
 		letter-spacing: 0.02em;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.aktionen {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		/* Hält die Tasten rechts, auch wenn sie in die zweite Zeile rutschen. */
+		margin-left: auto;
+	}
+
+	.aktion {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 8px 13px;
+		border-radius: 999px;
+		border: 1px solid var(--color-border);
+		background: var(--color-surface);
+		font-size: 0.85rem;
+		font-weight: 600;
+		white-space: nowrap;
+		transition: transform 0.15s ease;
+	}
+
+	.aktion.primaer {
+		background: var(--color-accent);
+		border-color: var(--color-accent);
+		color: var(--color-accent-contrast);
+	}
+
+	.aktion:disabled {
+		opacity: 0.45;
+	}
+
+	.aktion:not(:disabled):active {
+		transform: scale(0.95);
+	}
+
+	.ikone {
+		flex: none;
+		width: 34px;
+		height: 34px;
+		border-radius: 50%;
+		border: 1px solid var(--color-border);
+		background: var(--color-surface);
+		display: flex;
+		align-items: center;
+		justify-content: center;
 	}
 
 	/* Bezugsrahmen für den Zieh-Indikator: der muss über dem Scroller liegen,
@@ -391,10 +730,21 @@
 		overflow: hidden;
 		background: var(--color-bg-alt);
 		transition: transform 0.15s ease;
+		/* Beim Gedrückthalten soll der Auswahlmodus starten - nicht die
+		   Bild-Vorschau bzw. Textauswahl des Betriebssystems. */
+		-webkit-touch-callout: none;
+		-webkit-user-select: none;
+		user-select: none;
 	}
 
 	.thumb:active {
 		transform: scale(0.95);
+	}
+
+	/* Im Auswahlmodus bleibt die Tipp-Animation aus: das Bild schrumpft ohnehin
+	   sichtbar, sobald es markiert ist. */
+	.thumb.auswahl:active {
+		transform: none;
 	}
 
 	.thumb img {
@@ -402,6 +752,36 @@
 		height: 100%;
 		object-fit: cover;
 		animation: fade-in 0.3s ease;
+		transition: transform 0.15s ease;
+	}
+
+	.thumb.markiert {
+		outline: 2px solid var(--color-accent);
+		outline-offset: -2px;
+	}
+
+	.thumb.markiert img {
+		transform: scale(0.88);
+	}
+
+	.haken {
+		position: absolute;
+		top: 6px;
+		right: 6px;
+		width: 22px;
+		height: 22px;
+		border-radius: 50%;
+		border: 2px solid rgba(255, 255, 255, 0.85);
+		background: rgba(20, 16, 12, 0.35);
+		color: var(--color-accent-contrast);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.haken.an {
+		background: var(--color-accent);
+		border-color: var(--color-accent);
 	}
 
 	@keyframes fade-in {
@@ -411,6 +791,16 @@
 		to {
 			opacity: 1;
 		}
+	}
+
+	.spinner {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border: 2px solid var(--color-border);
+		border-top-color: var(--color-accent);
+		border-radius: 50%;
+		animation: drehen 0.7s linear infinite;
 	}
 
 	.empty {

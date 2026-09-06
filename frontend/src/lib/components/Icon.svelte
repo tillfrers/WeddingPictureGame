@@ -11,7 +11,10 @@
 			| 'chevron-last'
 			| 'refresh'
 			| 'close'
-			| 'alert';
+			| 'alert'
+			| 'check'
+			| 'check-circle'
+			| 'download';
 		size?: number;
 	} = $props();
 </script>
@@ -52,5 +55,20 @@
 		<circle cx="12" cy="12" r="9" />
 		<path d="M12 7.5v6" />
 		<circle cx="12" cy="16.25" r="0.9" fill="currentColor" stroke="none" />
+	</svg>
+{:else if name === 'check'}
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M5 12.5l4.5 4.5L19 7" />
+	</svg>
+{:else if name === 'check-circle'}
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<circle cx="12" cy="12" r="9" />
+		<path d="M8 12.2l2.8 2.8L16 9.5" />
+	</svg>
+{:else if name === 'download'}
+	<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M12 4v11" />
+		<path d="M7.5 10.5L12 15l4.5-4.5" />
+		<path d="M5 19h14" />
 	</svg>
 {/if}
