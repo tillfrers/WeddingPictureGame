@@ -6,14 +6,15 @@ public static class Constants
     
     public static readonly Dictionary<int, string> TableNames = new()
     {
-        {1, "9E79"},
-        {2, "859D"},
-        {3, "9B42"},
-        {4, "81E6"},
-        {5, "831D"},
-        {6, "B059"},
-        {7, "A816"},
-        {8, "A93A"}
+        {0, "43A2"},
+        {1, "4D60"},
+        {2, "4EBA"},
+        {3, "4E95"},
+        {4, "99BD"},
+        {5, "2DAE"},
+        {6, "4DE4"},
+        {7, "BA1B"},
+        {8, "A00D"}
     };
     
     public static readonly Dictionary<string, int> TableIds =

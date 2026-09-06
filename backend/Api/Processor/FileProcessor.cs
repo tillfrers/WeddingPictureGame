@@ -1,9 +1,10 @@
 using Api.Options;
+using Api.Repository;
 using Microsoft.Extensions.Options;
 
 namespace Api.Processor;
 
-public class FileProcessor(IOptions<ImagePathOptions> options) : IFileProcessor
+public class FileProcessor(IOptions<ImagePathOptions> options, IImageRepository imageRepository) : IFileProcessor
 {
     private string ImageRootPath => 
         options.Value.ImagePath ?? Path.Combine(Environment.CurrentDirectory,"images");
@@ -53,6 +54,21 @@ public class FileProcessor(IOptions<ImagePathOptions> options) : IFileProcessor
 
     public string GetThumbnailPath(Guid id, int table)
     {
+        var path = Path.Combine(GetThumbnailDirectory(table), id + ".jpeg");
+
+        if (!File.Exists(path))
+            throw new FileNotFoundException();
+
+        return path;
+    }
+    
+    public string GetOriginalPath(Guid id)
+    {
+        var table = imageRepository.GetTableForImageAsync(id).GetAwaiter().GetResult();
+        
+        if (table == 0)
+            throw new FileNotFoundException();
+        
         var path = Path.Combine(GetThumbnailDirectory(table), id + ".jpeg");
 
         if (!File.Exists(path))

@@ -12,4 +12,6 @@ public interface IImageRepository
     Task<(IReadOnlyList<GalleryDto>, int)> GetGalleryAsync(int table, int page, CancellationToken cancellationToken = default);
 
     Task<(IReadOnlyList<GalleryDto>, int)> GetGalleryAllAsync(int page, CancellationToken cancellationToken = default);
+    
+    Task<int> GetTableForImageAsync(Guid id, CancellationToken cancellationToken = default);
 }

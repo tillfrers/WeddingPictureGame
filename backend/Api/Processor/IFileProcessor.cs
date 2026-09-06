@@ -9,4 +9,6 @@ public interface IFileProcessor
     string GetDisplayPath(Guid id, int table);
 
     string GetThumbnailPath(Guid id, int table);
+    
+    string GetOriginalPath(Guid id);
 }

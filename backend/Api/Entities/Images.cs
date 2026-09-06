@@ -6,7 +6,7 @@ public class Images
 {
     public Guid Id { get; set; }
     
-    [Range(1, 8)]
+    [Range(0, 8)]
     public int Tables { get; set; }
 
     public required string PathOriginal { get; set; }

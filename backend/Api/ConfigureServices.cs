@@ -22,9 +22,11 @@ public static class ConfigureServices
         services.Configure<CapabilityHashOptions>(configuration);
         
         services.AddOptions<CapabilityHashOptions>()
-            .Bind(configuration)
-            .Validate(o => o.CapabilityHash is { Length: 64 } && o.CapabilityHash.All(Uri.IsHexDigit),
-                "CapabilityToken muss ein 64-stelliger SHA-256-Hex-String sein.")
+            .Bind(configuration.GetSection(CapabilityHashOptions.SectionName))
+            .Validate(o => o. TablesHash is { Length: 64 } && o.TablesHash.All(Uri.IsHexDigit),
+                "TablesHash muss ein 64-stelliger SHA-256-Hex-String sein.")
+            .Validate(o => o.AllHash is { Length: 64 } && o.AllHash.All(Uri.IsHexDigit),
+                "AllHash muss ein 64-stelliger SHA-256-Hex-String sein.")
             .ValidateOnStart();
         
         services.AddSingleton(TimeProvider.System);

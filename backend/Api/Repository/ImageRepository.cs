@@ -33,8 +33,13 @@ public class ImageRepository(AppDbContext dbContext, TimeProvider provider) : II
         PageAsync(dbContext.Images.AsNoTracking().Where(i => i.Tables == table), page, cancellationToken);
 
     public Task<(IReadOnlyList<GalleryDto>, int)> GetGalleryAllAsync(int page, CancellationToken cancellationToken = default) =>
-        PageAsync(dbContext.Images.AsNoTracking(), page, cancellationToken);
-    
+        PageAsync(dbContext.Images.Where(i => i.Tables != 0).AsNoTracking(), page, cancellationToken);
+
+    public async Task<int> GetTableForImageAsync(Guid id, CancellationToken cancellationToken = default)
+    { 
+        return (await dbContext.Images.SingleAsync(i => i.Id == id, cancellationToken)).Tables;
+    }
+
     private static async Task<(IReadOnlyList<GalleryDto>, int)> PageAsync(IQueryable<Images> query, int page, CancellationToken cancellationToken)
     {
         var ordered = query.OrderByDescending(i => i.DateCreated).ThenBy(i => i.Id);

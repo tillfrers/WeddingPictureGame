@@ -38,7 +38,10 @@ public sealed class ImageController(
     public async Task<IActionResult> Redeem([FromBody] RedeemDto dto)
     {
         var candidate = SHA256.HashData(Encoding.UTF8.GetBytes(dto.Token));
-        var expected = Convert.FromHexString(options.Value.CapabilityHash);
+        
+        var expected = dto.AllTables ? 
+            Convert.FromHexString(options.Value.AllHash) :
+            Convert.FromHexString(options.Value.TablesHash);
 
         if (!CryptographicOperations.FixedTimeEquals(candidate, expected))
             return Problem(
@@ -165,6 +168,30 @@ public sealed class ImageController(
         Response.Headers.CacheControl = ImmutableCacheControl;
         return PhysicalFile(path, JpegContentType);
     }
+    
+    [HttpGet("{id}/original")]
+    [ProducesResponseType<FileResult>(StatusCodes.Status200OK, JpegContentType)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
+    public IActionResult GetOriginal(string id)
+    {
+        if (!Guid.TryParse(id, out var guid))
+            return BadRequestProblem("Die Id ist ungültig");
+
+        string path;
+        try
+        {
+            path = fileProcessor.GetOriginalPath(guid);
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFoundProblem("Bild nicht gefunden");
+        }
+
+        Response.Headers.CacheControl = ImmutableCacheControl;
+        return PhysicalFile(path, JpegContentType, $"{guid}.jpg", enableRangeProcessing: true);
+    }
+    
 
     private ObjectResult BadRequestProblem(string detail) =>
         Problem(
