@@ -2,25 +2,40 @@
 	import { fade, scale } from 'svelte/transition';
 
 	export interface TransferItem {
+		/** `ready` = geladen, wartet noch auf das Teilen-Menü. */
 		name: string;
-		status: 'pending' | 'running' | 'done' | 'error';
+		status: 'pending' | 'running' | 'ready' | 'done' | 'error';
 		error?: string;
 	}
 
 	let {
 		items,
 		finished,
-		busyTitle,
+		heading,
 		verb,
-		onClose
+		onClose,
+		closeLabel = 'Schließen',
+		showClose = false,
+		actionLabel,
+		actionHint,
+		actionBusy = false,
+		onAction
 	}: {
 		items: TransferItem[];
+		/** Alles durch - schaltet die Fehlerbilanz frei. */
 		finished: boolean;
-		/** Überschrift, solange noch übertragen wird. */
-		busyTitle: string;
+		/** Überschrift; der Aufrufer kennt die Phase, die Anzeige nicht. */
+		heading: string;
 		/** Partizip für die Fehlerzeile, z. B. "hochgeladen" oder "gespeichert". */
 		verb: string;
 		onClose: () => void;
+		closeLabel?: string;
+		showClose?: boolean;
+		/** Optionale Haupttaste, z. B. "Bilder sichern" für das Teilen-Menü. */
+		actionLabel?: string;
+		actionHint?: string;
+		actionBusy?: boolean;
+		onAction?: () => void;
 	} = $props();
 
 	const doneCount = $derived(
@@ -32,7 +47,7 @@
 
 <div class="backdrop" transition:fade={{ duration: 180 }}>
 	<div class="panel" transition:scale={{ start: 0.92, duration: 240 }}>
-		<h2>{finished ? 'Fertig' : busyTitle}</h2>
+		<h2>{heading}</h2>
 		<p class="progress-text">{doneCount} / {items.length}</p>
 
 		<!-- Bei vielen Bildern sagt der Balken schneller als die Liste, wie weit
@@ -54,6 +69,8 @@
 					<span class="status">
 						{#if item.status === 'pending' || item.status === 'running'}
 							<span class="spinner"></span>
+						{:else if item.status === 'ready'}
+							●
 						{:else if item.status === 'done'}
 							✓
 						{:else}
@@ -73,8 +90,20 @@
 			</p>
 		{/if}
 
-		{#if finished}
-			<button class="close-btn" onclick={onClose} transition:fade>Schließen</button>
+		{#if actionLabel && onAction}
+			{#if actionHint}
+				<p class="action-hint">{actionHint}</p>
+			{/if}
+			<button class="action-btn" onclick={onAction} disabled={actionBusy} transition:fade>
+				{#if actionBusy}<span class="spinner hell"></span>{/if}
+				{actionLabel}
+			</button>
+		{/if}
+
+		{#if showClose}
+			<button class="close-btn" class:zweitrangig={!!actionLabel} onclick={onClose} transition:fade>
+				{closeLabel}
+			</button>
 		{/if}
 	</div>
 </div>
@@ -167,6 +196,11 @@
 		text-align: center;
 	}
 
+	li.ready .status {
+		color: var(--color-text-muted);
+		font-size: 0.7rem;
+	}
+
 	li.done .status {
 		color: #3f8f5f;
 	}
@@ -188,6 +222,14 @@
 		text-align: center;
 	}
 
+	.action-hint {
+		margin: 4px 0 10px;
+		font-size: 0.8rem;
+		line-height: 1.45;
+		color: var(--color-text-muted);
+		text-align: center;
+	}
+
 	.spinner {
 		display: inline-block;
 		width: 14px;
@@ -198,12 +240,20 @@
 		animation: spin 0.7s linear infinite;
 	}
 
+	.spinner.hell {
+		border-color: rgba(28, 23, 18, 0.35);
+		border-top-color: var(--color-accent-contrast);
+		margin-right: 8px;
+		vertical-align: -2px;
+	}
+
 	@keyframes spin {
 		to {
 			transform: rotate(360deg);
 		}
 	}
 
+	.action-btn,
 	.close-btn {
 		margin-top: 8px;
 		width: 100%;
@@ -213,5 +263,16 @@
 		background: var(--color-accent);
 		color: var(--color-accent-contrast);
 		font-weight: 600;
+	}
+
+	.action-btn:disabled {
+		opacity: 0.6;
+	}
+
+	/* Steht eine Haupttaste darüber, ist Schließen nur noch der Ausweg. */
+	.close-btn.zweitrangig {
+		background: none;
+		color: var(--color-text-muted);
+		padding: 10px;
 	}
 </style>

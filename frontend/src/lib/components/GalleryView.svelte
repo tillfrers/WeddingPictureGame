@@ -4,7 +4,13 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { fade } from 'svelte/transition';
 	import { imageClient, apiErrorMessage, displayUrl } from '$lib/api';
-	import { saveBlob } from '$lib/download';
+	import {
+		kannTeilen,
+		saveBlob,
+		teileDateien,
+		STAPEL_MAX_BYTES,
+		STAPEL_MAX_DATEIEN
+	} from '$lib/download';
 	import type { PagedResultOfGalleryDto } from '$lib/api/client';
 	import UploadSheet from '$lib/components/UploadSheet.svelte';
 	import TransferProgress, { type TransferItem } from '$lib/components/TransferProgress.svelte';
@@ -318,52 +324,186 @@
 	let downloadItems = $state<TransferItem[]>([]);
 	let downloadActive = $state(false);
 
-	const downloadFinished = $derived(
-		downloadItems.length > 0 &&
-			downloadItems.every((i) => i.status === 'done' || i.status === 'error')
+	// laden   = Originale werden geholt
+	// sichern = Stapel liegt bereit und wartet auf den Tipp aufs Teilen-Menü
+	// fertig  = durch
+	let downloadPhase = $state<'laden' | 'sichern' | 'fertig'>('laden');
+	let shareBusy = $state(false);
+
+	// Geht dieser Lauf über das Teilen-Menü oder über den Download-Ordner?
+	let dlTeilen = $state(false);
+	let dlStapel = $state<File[]>([]);
+
+	// Reiner Ablaufzustand, den die Anzeige nicht braucht.
+	let dlIds: string[] = [];
+	let dlCursor = 0;
+	let dlStapelIndizes: number[] = [];
+
+	// Ein Bild, das den laufenden Stapel gesprengt hätte und deshalb schon
+	// geladen auf den nächsten wartet - noch einmal holen wäre Verschwendung.
+	let dlUebertrag: { datei: File; index: number } | null = null;
+
+	const downloadHeading = $derived(
+		downloadPhase === 'fertig'
+			? 'Fertig'
+			: downloadPhase === 'sichern'
+				? 'Bereit zum Sichern'
+				: dlTeilen
+					? 'Bilder werden geladen…'
+					: 'Bilder werden gespeichert…'
 	);
 
-	// Pause zwischen zwei Dateien: mobile Browser drosseln Downloads, die zu
-	// dicht aufeinander folgen, und verschlucken dann einzelne Bilder.
+	// Pause zwischen zwei Downloads: Browser drosseln Downloads, die zu dicht
+	// aufeinander folgen, und verschlucken dann einzelne Bilder.
 	const DOWNLOAD_PAUSE_MS = 150;
 
+	const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 	/**
-	 * Holt die Originale der markierten Bilder und legt sie einzeln auf dem Gerät
-	 * ab. Bewusst nacheinander: mehrere gleichzeitig ausgelöste Downloads
-	 * blockieren sich auf dem Handy gegenseitig, und der Fortschritt bliebe
-	 * unehrlich.
+	 * Startet das Sichern der markierten Bilder.
+	 *
+	 * Zwei Wege, siehe $lib/download: auf dem Handy über das Teilen-Menü (die
+	 * Bilder landen dann wirklich in der Galerie), sonst als Download. Der
+	 * Teilen-Weg geht in Stapeln, weil Chromium höchstens 10 Dateien pro Aufruf
+	 * annimmt - und weil iOS für jeden Aufruf einen frischen Tipp verlangt.
 	 */
 	async function downloadSelected() {
 		const ids = [...selectedIds];
 		if (ids.length === 0 || downloadActive) return;
 
+		dlIds = ids;
+		dlCursor = 0;
+		dlStapel = [];
+		dlStapelIndizes = [];
+		dlUebertrag = null;
+		dlTeilen = kannTeilen();
+
 		downloadItems = ids.map((_, i) => ({ name: `Bild ${i + 1}`, status: 'pending' as const }));
+		downloadPhase = 'laden';
 		downloadActive = true;
 
-		for (let i = 0; i < ids.length; i++) {
-			downloadItems[i] = { ...downloadItems[i], status: 'running' };
+		await ladeWeiter();
+	}
 
-			try {
-				const datei = await imageClient.getOriginal(ids[i]);
-				saveBlob(datei.data, datei.fileName || `${ids[i]}.jpg`);
-				downloadItems[i] = { ...downloadItems[i], status: 'done' };
-			} catch (err) {
-				downloadItems[i] = { ...downloadItems[i], status: 'error', error: apiErrorMessage(err) };
+	/**
+	 * Holt Bilder, bis alles durch ist oder ein Stapel zum Teilen voll ist. Auf
+	 * dem Download-Weg gibt es keine Stapel - dort wird jedes Bild sofort
+	 * abgelegt und ohne Unterbrechung weitergelaufen.
+	 */
+	async function ladeWeiter() {
+		while (dlCursor < dlIds.length || dlUebertrag) {
+			downloadPhase = 'laden';
+			dlStapel = [];
+			dlStapelIndizes = [];
+			let bytes = 0;
+
+			// Der Übertrag des letzten Stapels eröffnet den neuen.
+			if (dlUebertrag) {
+				dlStapel = [dlUebertrag.datei];
+				dlStapelIndizes = [dlUebertrag.index];
+				bytes = dlUebertrag.datei.size;
+				dlUebertrag = null;
 			}
 
-			if (i < ids.length - 1) await new Promise((r) => setTimeout(r, DOWNLOAD_PAUSE_MS));
+			while (dlCursor < dlIds.length && (!dlTeilen || dlStapel.length < STAPEL_MAX_DATEIEN)) {
+				const i = dlCursor++;
+				const id = dlIds[i];
+
+				downloadItems[i] = { ...downloadItems[i], status: 'running' };
+
+				try {
+					const datei = await imageClient.getOriginal(id);
+					const name = datei.fileName || `${id}.jpg`;
+
+					if (dlTeilen) {
+						const file = new File([datei.data], name, {
+							type: datei.data.type || 'image/jpeg'
+						});
+
+						// Die Größe muss vorher passen, nicht hinterher: ein Foto wiegt
+						// schnell mehrere MB, und ein Stapel, der die Grenze erst beim
+						// Überschreiten bemerkt, ist bereits zu schwer fürs Teilen-Menü.
+						if (dlStapel.length > 0 && bytes + file.size > STAPEL_MAX_BYTES) {
+							dlUebertrag = { datei: file, index: i };
+							downloadItems[i] = { ...downloadItems[i], status: 'ready' };
+							break;
+						}
+
+						dlStapel = [...dlStapel, file];
+						dlStapelIndizes.push(i);
+						bytes += file.size;
+						downloadItems[i] = { ...downloadItems[i], status: 'ready' };
+					} else {
+						saveBlob(datei.data, name);
+						downloadItems[i] = { ...downloadItems[i], status: 'done' };
+						if (dlCursor < dlIds.length) await pause(DOWNLOAD_PAUSE_MS);
+					}
+				} catch (err) {
+					downloadItems[i] = { ...downloadItems[i], status: 'error', error: apiErrorMessage(err) };
+				}
+			}
+
+			// Stapel steht: ab hier braucht es einen frischen Tipp, sonst lehnt
+			// iOS das Teilen-Menü als "ohne Nutzeraktion" ab.
+			if (dlStapel.length > 0) {
+				downloadPhase = 'sichern';
+				return;
+			}
 		}
+
+		downloadPhase = 'fertig';
+	}
+
+	/** Übergibt den geladenen Stapel ans Teilen-Menü des Geräts. */
+	async function stapelSichern() {
+		// Die Phase muss mitgeprüft werden: Svelte schreibt das DOM verzögert,
+		// der Knopf des vorigen Stapels ist also noch einen Moment sichtbar,
+		// während schon der nächste geladen wird. Ein Tipp in diesem Fenster
+		// (oder ein Doppeltipp) würde sonst einen halb gefüllten Stapel teilen
+		// und ihn dem Ladelauf unter den Händen wegziehen.
+		if (shareBusy || downloadPhase !== 'sichern' || dlStapel.length === 0) return;
+
+		shareBusy = true;
+		try {
+			// Frische Kopie: navigator.share erwartet eine echte Liste, keinen
+			// Reaktivitäts-Proxy.
+			const geteilt = await teileDateien([...dlStapel]);
+
+			// Abgebrochen: Stapel stehen lassen, der Knopf bleibt bedienbar.
+			if (!geteilt) return;
+
+			for (const i of dlStapelIndizes) downloadItems[i] = { ...downloadItems[i], status: 'done' };
+		} catch (err) {
+			const text =
+				err instanceof Error && err.message
+					? err.message
+					: 'Das Teilen-Menü hat die Bilder nicht angenommen.';
+
+			for (const i of dlStapelIndizes)
+				downloadItems[i] = { ...downloadItems[i], status: 'error', error: text };
+		} finally {
+			shareBusy = false;
+		}
+
+		dlStapel = [];
+		dlStapelIndizes = [];
+		await ladeWeiter();
 	}
 
 	function closeDownloadProgress() {
-		const gescheitert = downloadItems.some((i) => i.status === 'error');
+		const sauber = downloadPhase === 'fertig' && !downloadItems.some((i) => i.status === 'error');
 
 		downloadActive = false;
 		downloadItems = [];
+		dlIds = [];
+		dlStapel = [];
+		dlStapelIndizes = [];
+		dlUebertrag = null;
+		dlCursor = 0;
 
-		// Nach einem sauberen Durchlauf ist die Auswahl erledigt. Gab es Fehler,
-		// bleibt sie stehen, damit der Gast es direkt noch einmal versuchen kann.
-		if (!gescheitert) exitSelectMode();
+		// Nach einem sauberen Durchlauf ist die Auswahl erledigt. Gab es Fehler
+		// oder wurde abgebrochen, bleibt sie für einen zweiten Versuch stehen.
+		if (sauber) exitSelectMode();
 	}
 
 	function goToPage(target: number) {
@@ -533,8 +673,9 @@
 	<TransferProgress
 		items={uploadItems}
 		finished={uploadFinished}
-		busyTitle="Bilder werden hochgeladen…"
+		heading={uploadFinished ? 'Fertig' : 'Bilder werden hochgeladen…'}
 		verb="hochgeladen"
+		showClose={uploadFinished}
 		onClose={closeUploadProgress}
 	/>
 {/if}
@@ -542,10 +683,18 @@
 {#if downloadActive}
 	<TransferProgress
 		items={downloadItems}
-		finished={downloadFinished}
-		busyTitle="Bilder werden gespeichert…"
-		verb="gespeichert"
+		finished={downloadPhase === 'fertig'}
+		heading={downloadHeading}
+		verb="gesichert"
+		showClose={downloadPhase !== 'laden'}
+		closeLabel={downloadPhase === 'fertig' ? 'Schließen' : 'Abbrechen'}
 		onClose={closeDownloadProgress}
+		actionLabel={downloadPhase === 'sichern' ? `Bilder sichern (${dlStapel.length})` : undefined}
+		actionHint={downloadPhase === 'sichern'
+			? 'Im folgenden Menü „Bilder sichern“ wählen – dann landen die Fotos direkt in deiner Galerie.'
+			: undefined}
+		actionBusy={shareBusy}
+		onAction={downloadPhase === 'sichern' ? stapelSichern : undefined}
 	/>
 {/if}
 

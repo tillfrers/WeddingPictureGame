@@ -30,6 +30,13 @@ export function apiErrorStatus(err: unknown): number {
 
 /** Extrahiert eine für Menschen lesbare Fehlermeldung aus einer ProblemDetails-Antwort. */
 export function apiErrorMessage(err: unknown): string {
+	// fetch wirft bei Netzwerkfehlern und Abbrüchen einen TypeError bzw. einen
+	// AbortError - ganz ohne Status und ohne Body. Auf dem Handy passiert das,
+	// wenn der Browser die Seite mitten in einer Anfrage anhält; im Backend-Log
+	// steht davon nichts, weil die Anfrage dort nie ankommt.
+	if (err instanceof TypeError || (err instanceof Error && err.name === 'AbortError'))
+		return 'Die Verbindung wurde unterbrochen. Bitte versuche es noch einmal.';
+
 	// 401 und 403 kommen aus der Autorisierung ohne verwertbaren Body - da gibt
 	// es nichts zu extrahieren, der Gast braucht aber trotzdem einen Hinweis.
 	const status = apiErrorStatus(err);
