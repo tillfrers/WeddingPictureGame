@@ -50,7 +50,12 @@ public sealed class ImageController(
                 title: "Nicht authentifiziert");
 
         var identity = new ClaimsIdentity(
-            [new Claim(ClaimTypes.Name, "Gast")],
+            [
+                new Claim(ClaimTypes.Name, "Gast"),
+                new Claim(
+                    Constants.Constants.ScopeClaim,
+                    dto.AllTables ? Constants.Constants.ScopeAllTables : Constants.Constants.ScopeTables)
+            ],
             CookieAuthenticationDefaults.AuthenticationScheme);
 
         await HttpContext.SignInAsync(
@@ -105,6 +110,7 @@ public sealed class ImageController(
     }
     
     [HttpGet("gallery")]
+    [Authorize(Policy = Constants.Constants.AllTablesPolicy)]
     [ProducesResponseType<PagedResult<GalleryDto>>(StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     public async Task<ActionResult<PagedResult<GalleryDto>>> GetGalleryAll([FromQuery] int page, CancellationToken cancellationToken)
@@ -170,6 +176,7 @@ public sealed class ImageController(
     }
     
     [HttpGet("{id}/original")]
+    [Authorize(Policy = Constants.Constants.AllTablesPolicy)]
     [ProducesResponseType<FileResult>(StatusCodes.Status200OK, JpegContentType)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]

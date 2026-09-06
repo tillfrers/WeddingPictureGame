@@ -51,9 +51,15 @@ builder.Services
     });
 
 builder.Services.AddAuthorization(o =>
+{
     o.FallbackPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
-        .Build());
+        .Build();
+    
+    o.AddPolicy(
+        Api.Constants.Constants.AllTablesPolicy,
+        p => p.RequireClaim(Api.Constants.Constants.ScopeClaim, Api.Constants.Constants.ScopeAllTables));
+});
 
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {

@@ -4,6 +4,11 @@ public static class Constants
 {
     public const int PageSizeGallery = 12;
     
+    public const string ScopeClaim = "wpg:scope";
+    public const string ScopeTables = "tables";
+    public const string ScopeAllTables = "all";
+    public const string AllTablesPolicy = "AllTables";
+    
     public static readonly Dictionary<int, string> TableNames = new()
     {
         {0, "43A2"},

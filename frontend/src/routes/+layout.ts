@@ -7,12 +7,21 @@ import type { LayoutLoad } from './$types';
 // überall dieselbe index.html aus (siehe svelte.config.js -> fallback).
 export const ssr = false;
 
+/** Pfad der Galerie über alle Tische - die einzige Route hinter dem Einladungs-Token. */
+const GESAMTGALERIE = '/gallery';
+
 /**
  * Alle Backend-Endpunkte (ausser /redeem) verlangen den Auth-Cookie. Den gibt
- * es nur gegen das Capability-Token aus dem QR-Code bzw. dem Einladungslink:
+ * es nur gegen ein Capability-Token, und davon gibt es zwei:
  *
- *   /9E79?token=...      -> Tisch-Galerie   (QR-Code am Tisch)
- *   /gallery?token=...   -> alle Tische     (Einladungslink nach der Hochzeit)
+ *   /4D60?token=...     -> Tisch-Token, öffnet die Tisch-Endpunkte (QR-Code am Tisch)
+ *   /gallery?token=...  -> Einladungs-Token, öffnet zusätzlich die Galerie
+ *                          über alle Tische (Einladungslink nach der Hochzeit)
+ *
+ * Welches der beiden gemeint ist, verrät das Ziel des Links - deshalb hängt
+ * `allTables` am Pfad. Das Backend prüft je nach Flag gegen einen anderen Hash
+ * und hinterlegt das Ergebnis als Scope im Cookie; ein Tisch-Token kommt damit
+ * nicht an die Gesamtgalerie.
  *
  * Das Token wird hier einmal eingeloest und danach per Redirect aus der URL
  * entfernt, damit es nicht in History, Lesezeichen oder geteilten Links landet.
@@ -25,8 +34,11 @@ export const load: LayoutLoad = async ({ url }) => {
 
 	if (!token) return;
 
+	// Ein von Hand angehängter Schrägstrich soll den Link nicht kaputt machen.
+	const allTables = url.pathname.replace(/\/+$/, '') === GESAMTGALERIE;
+
 	try {
-		await imageClient.redeem(new RedeemDto({ token }));
+		await imageClient.redeem(new RedeemDto({ token, allTables }));
 	} catch {
 		// Ungültiges Token: nicht hier abbrechen, sondern den Redirect trotzdem
 		// ausführen. Die Seite läuft dann in ihren 401 und zeigt den passenden

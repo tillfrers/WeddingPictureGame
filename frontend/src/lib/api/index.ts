@@ -30,10 +30,17 @@ export function apiErrorStatus(err: unknown): number {
 
 /** Extrahiert eine für Menschen lesbare Fehlermeldung aus einer ProblemDetails-Antwort. */
 export function apiErrorMessage(err: unknown): string {
-	// 401 kommt aus der Fallback-Policy ohne Body - da gibt es nichts zu
-	// extrahieren, der Gast braucht aber trotzdem einen brauchbaren Hinweis.
-	if (apiErrorStatus(err) === 401)
+	// 401 und 403 kommen aus der Autorisierung ohne verwertbaren Body - da gibt
+	// es nichts zu extrahieren, der Gast braucht aber trotzdem einen Hinweis.
+	const status = apiErrorStatus(err);
+
+	if (status === 401)
 		return 'Dieser Zugang ist nicht (mehr) gültig. Bitte scanne den QR-Code an deinem Tisch erneut.';
+
+	// Eingelöst, aber mit dem falschen Token: das Tisch-Token aus dem QR-Code
+	// öffnet nur den eigenen Tisch, nicht die Galerie über alle Tische.
+	if (status === 403)
+		return 'Dieser Zugang zeigt nur die Fotos deines Tisches. Für alle Fotos brauchst du den Einladungslink.';
 
 	if (err && typeof err === 'object') {
 		const e = err as Record<string, unknown>;

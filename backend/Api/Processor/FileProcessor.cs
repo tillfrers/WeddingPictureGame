@@ -16,7 +16,7 @@ public class FileProcessor(IOptions<ImagePathOptions> options, IImageRepository 
     
     public void EnsurePathExists()
     { 
-        for (var i = 1; i <= 8; i++)
+        for (var i = 0; i <= 8; i++)
         { 
             if (!Directory.Exists(GetOriginalDirectory(i)))
                 Directory.CreateDirectory(GetOriginalDirectory(i)); 
@@ -69,7 +69,7 @@ public class FileProcessor(IOptions<ImagePathOptions> options, IImageRepository 
         if (table == 0)
             throw new FileNotFoundException();
         
-        var path = Path.Combine(GetThumbnailDirectory(table), id + ".jpeg");
+        var path = Path.Combine(GetOriginalDirectory(table), id + ".jpeg");
 
         if (!File.Exists(path))
             throw new FileNotFoundException();

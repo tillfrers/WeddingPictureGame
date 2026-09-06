@@ -1,19 +1,25 @@
 <script lang="ts">
 	import { fade, scale } from 'svelte/transition';
 
-	export interface UploadItem {
+	export interface TransferItem {
 		name: string;
-		status: 'pending' | 'uploading' | 'done' | 'error';
+		status: 'pending' | 'running' | 'done' | 'error';
 		error?: string;
 	}
 
 	let {
 		items,
 		finished,
+		busyTitle,
+		verb,
 		onClose
 	}: {
-		items: UploadItem[];
+		items: TransferItem[];
 		finished: boolean;
+		/** Überschrift, solange noch übertragen wird. */
+		busyTitle: string;
+		/** Partizip für die Fehlerzeile, z. B. "hochgeladen" oder "gespeichert". */
+		verb: string;
 		onClose: () => void;
 	} = $props();
 
@@ -21,19 +27,32 @@
 		items.filter((i) => i.status === 'done' || i.status === 'error').length
 	);
 	const errorCount = $derived(items.filter((i) => i.status === 'error').length);
+	const percent = $derived(items.length === 0 ? 0 : (doneCount / items.length) * 100);
 </script>
 
 <div class="backdrop" transition:fade={{ duration: 180 }}>
 	<div class="panel" transition:scale={{ start: 0.92, duration: 240 }}>
-		<h2>{finished ? 'Fertig' : 'Bilder werden hochgeladen…'}</h2>
+		<h2>{finished ? 'Fertig' : busyTitle}</h2>
 		<p class="progress-text">{doneCount} / {items.length}</p>
 
+		<!-- Bei vielen Bildern sagt der Balken schneller als die Liste, wie weit
+		     es noch ist - beim Herunterladen können das dreistellig viele sein. -->
+		<div
+			class="bar"
+			role="progressbar"
+			aria-valuemin={0}
+			aria-valuemax={items.length}
+			aria-valuenow={doneCount}
+		>
+			<div class="fill" style="width: {percent}%"></div>
+		</div>
+
 		<ul>
-			{#each items as item (item.name)}
+			{#each items as item, i (i)}
 				<li class={item.status}>
 					<span class="name">{item.name}</span>
 					<span class="status">
-						{#if item.status === 'pending' || item.status === 'uploading'}
+						{#if item.status === 'pending' || item.status === 'running'}
 							<span class="spinner"></span>
 						{:else if item.status === 'done'}
 							✓
@@ -49,7 +68,9 @@
 		</ul>
 
 		{#if errorCount > 0 && finished}
-			<p class="summary-error">{errorCount} von {items.length} Bildern konnten nicht hochgeladen werden.</p>
+			<p class="summary-error">
+				{errorCount} von {items.length} Bildern konnten nicht {verb} werden.
+			</p>
 		{/if}
 
 		{#if finished}
@@ -62,8 +83,8 @@
 	.backdrop {
 		position: fixed;
 		inset: 0;
-		/* Ein Zug nach unten während des Uploads würde sonst die
-		   Aktualisieren-Geste auslösen und die laufenden Uploads abbrechen. */
+		/* Ein Zug nach unten während der Übertragung würde sonst die
+		   Aktualisieren-Geste auslösen und die laufenden Anfragen abbrechen. */
 		touch-action: none;
 		background: rgba(20, 16, 12, 0.55);
 		z-index: 50;
@@ -92,10 +113,25 @@
 	}
 
 	.progress-text {
-		margin: 0 0 16px;
+		margin: 0 0 10px;
 		text-align: center;
 		color: var(--color-text-muted);
 		font-variant-numeric: tabular-nums;
+	}
+
+	.bar {
+		height: 4px;
+		border-radius: 2px;
+		background: var(--color-bg-alt);
+		overflow: hidden;
+		margin-bottom: 16px;
+		flex: none;
+	}
+
+	.fill {
+		height: 100%;
+		background: var(--color-accent);
+		transition: width 0.25s ease;
 	}
 
 	ul {

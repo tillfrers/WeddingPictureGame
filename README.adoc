@@ -8,22 +8,30 @@ It's a simple ASP.NET backend with a Svelte frontend. Wedding guests use the sit
 == Links
 
 Every endpoint except `POST /api/Image/redeem` requires the auth cookie. The
-cookie is handed out in exchange for the capability token, so every link that
+cookie is handed out in exchange for a capability token, so every link that
 guests receive carries `?token=<capability token>`. The frontend redeems the
 token once and then drops it from the URL, so it never ends up in history,
 bookmarks or shared links.
+
+There are two tokens, and the link target decides which one is redeemed:
 
 [cols="1,2"]
 |===
 | Link | Lands on
 
 | `+https://host/<tischcode>?token=…+`
-| Gallery of that table, with upload button — this is what the QR code on the table encodes. `+https://host/?tisch=<tischcode>&token=…+` works as well.
+| Gallery of that table, with upload button — this is what the QR code on the table encodes. `+https://host/?tisch=<tischcode>&token=…+` works as well. Redeemed against `TablesHash`.
 
 | `+https://host/gallery?token=…+`
-| Gallery across all tables, read-only — the invite link for after the wedding.
+| Gallery across all tables — the invite link for after the wedding. Photos can be selected there and downloaded in their original resolution. Redeemed against `AllHash`.
 |===
 
+The redeemed token is recorded as a scope claim in the cookie, so a table token
+cannot open the gallery across all tables: `GET /api/Image/gallery` requires the
+`AllTables` policy.
+
 Table codes are the four-digit hex values in `backend/Api/Constants/Constants.cs`
-(table 1 is `9E79`, table 2 is `859D`, …). The token is checked against the
-SHA-256 hash in `CapabilityHash` (`appsettings.json`).
+(table 1 is `4D60`, table 2 is `4EBA`, …). Table `0` (`43A2`) is a test table: it
+behaves like any other table, but its photos are left out of the gallery across
+all tables. Both tokens are checked against the SHA-256 hashes in
+`CapabilityHash` (`appsettings.json`).
